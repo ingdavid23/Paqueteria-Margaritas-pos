@@ -185,9 +185,13 @@ tailwind.config = {
       <label class="block text-sm text-muted mb-1">Monto a cobrar</label>
       <input id="pay-amount-to-collect" type="number" class="w-full bg-card border border-card rounded-xl px-4 py-3 text-xl font-bold focus:outline-none" disabled>
      </div>
-     <div>
-        <label class="block text-sm text-muted mb-1">¿Con cuánto efectivo paga el cliente?</label>
+     <div id="cash-input-container">
+        <label class="block text-sm text-muted mb-1">Monto recibido en EFECTIVO</label>
         <input id="pay-cash-received" type="number" step="0.01" class="w-full bg-card border-2 border-success/40 rounded-xl px-4 py-3 text-xl font-bold focus:border-success focus:outline-none" placeholder="0">
+       </div>
+       <div id="transfer-input-container" class="mt-4">
+        <label class="block text-sm text-muted mb-1">Monto recibido en TRANSFERENCIA</label>
+        <input id="pay-transfer-received" type="number" step="0.01" class="w-full bg-card border-2 border-accent2/40 rounded-xl px-4 py-3 text-xl font-bold focus:border-accent2 focus:outline-none" placeholder="0">
        </div>
        <div>
         <label class="block text-sm text-muted mb-1">Número de Rastreo (Opcional)</label>
@@ -274,12 +278,17 @@ tailwind.config = {
       <button type="button" id="barcode-close" class="w-full bg-card text-muted font-semibold py-3 rounded-xl hover:bg-surface transition print:hidden">Cerrar</button>
     </div>
   </div>
-
   <div id="evidence-modal" class="fixed inset-0 z-[10002] hidden items-center justify-center p-4" style="background:rgba(0,0,0,.8)">
     <div class="bg-surface rounded-2xl p-6 max-w-md w-full mx-auto modal-show flex flex-col items-center">
       <h3 class="font-bold text-lg mb-4 text-accent">Evidencia Fotográfica</h3>
       <img id="evidence-img-display" src="" class="w-full max-h-[60vh] object-contain rounded-lg border border-card mb-4 bg-gray-100">
-      <button type="button" id="evidence-close" class="w-full bg-card text-muted font-semibold py-3 rounded-xl hover:bg-bg transition">Cerrar Imagen</button>
+      <div class="flex gap-3 w-full">
+        <button type="button" id="evidence-delete" class="flex-1 bg-danger/10 text-danger font-semibold py-3 rounded-xl hover:bg-danger/20 transition flex items-center justify-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+          Borrar Foto
+        </button>
+        <button type="button" id="evidence-close" class="flex-1 bg-card text-muted font-semibold py-3 rounded-xl hover:bg-bg transition">Cerrar</button>
+      </div>
     </div>
   </div>
   <div id="barcode-modal" class="fixed inset-0 z-[10000] hidden items-center justify-center p-4" style="background:rgba(0,0,0,.8)">
@@ -856,14 +865,47 @@ document.getElementById('pin-confirm').onclick = () => {
 
 
 
-// ========== LÓGICA PARA VER EVIDENCIAS ==========
+// ========== LÓGICA PARA VER Y ELIMINAR EVIDENCIAS ==========
+let currentEvidenceSaleId = null;
+
 window.showEvidence = (saleId) => {
   const sale = allRecords.find(r => r.id === saleId);
   if (sale && sale.evidence_image) {
+    currentEvidenceSaleId = saleId; // Recordamos qué ticket estamos viendo
     document.getElementById('evidence-img-display').src = sale.evidence_image;
     document.getElementById('evidence-modal').classList.remove('hidden');
     document.getElementById('evidence-modal').classList.add('flex');
   }
+};
+
+document.getElementById('evidence-close').onclick = () => {
+  document.getElementById('evidence-modal').classList.remove('flex');
+  document.getElementById('evidence-modal').classList.add('hidden');
+  document.getElementById('evidence-img-display').src = '';
+  currentEvidenceSaleId = null; // Limpiamos la memoria
+};
+
+document.getElementById('evidence-delete').onclick = () => {
+  if (!currentEvidenceSaleId) return;
+  
+  showConfirm('¿Estás seguro de eliminar esta evidencia fotográfica? Esta acción no se puede deshacer.', async () => {
+    const sale = allRecords.find(r => r.id === currentEvidenceSaleId);
+    
+    if (sale) {
+      // 1. Limpiamos las variables en la memoria RAM
+      sale.evidence_image = null;
+      sale.evidence_delete_at = null;
+      
+      // 2. Actualizamos el registro en la base de datos de Firebase
+      await dbSdk.update(sale);
+      
+      showToast('Evidencia eliminada correctamente', 'success');
+      
+      // 3. Cerramos la ventana y redibujamos la tabla para que el botón verde desaparezca
+      document.getElementById('evidence-close').click();
+      render(); 
+    }
+  });
 };
 
 document.getElementById('evidence-close').onclick = () => {
@@ -2916,6 +2958,7 @@ function renderCashierPOS() {
           <div class="flex gap-2">
             <button data-pay="Efectivo" class="flex-1 py-2 rounded-lg text-sm font-semibold transition ${paymentMethod==='Efectivo'?'bg-success text-white':'bg-card text-muted hover:bg-bg'}">Efectivo</button>
             <button data-pay="Transfer" class="flex-1 py-2 rounded-lg text-sm font-semibold transition ${paymentMethod==='Transfer'?'bg-accent2 text-white':'bg-card text-muted hover:bg-bg'}">Transfer</button>
+            <button data-pay="Mixto" class="flex-1 py-2 rounded-lg text-sm font-semibold transition ${paymentMethod==='Mixto'?'bg-warn text-white':'bg-card text-muted hover:bg-bg'}">Mixto</button>
           </div>
           
           <button id="checkout-btn" class="w-full bg-warn text-white font-bold py-3 rounded-lg hover:opacity-90 transition ${cart.length?'':'opacity-50 cursor-not-allowed'}" ${cart.length?'':'disabled'}>
@@ -2932,11 +2975,18 @@ function renderCashierPOS() {
     renderCartItems();
 
     // === AQUÍ PEGAS LA NUEVA FUNCIÓN ===
+    // === AQUÍ PEGAS LA NUEVA FUNCIÓN ===
     window.updateCashBadge = () => {
       if (!sessionStart) return;
       // Calcula las ventas más recientes directamente de la base de datos
       const liveSales = records('sale').filter(s => s.cashier === (currentUser?.username||'') && s.date >= sessionStart);
-      const liveCash = liveSales.filter(s=>s.payment_method==='Efectivo').reduce((a,s)=>a+(s.total||0),0);
+      
+      // NUEVO: Calcula sumando el efectivo puro y las partes en efectivo de los pagos Mixtos
+      const liveCash = liveSales.reduce((a, s) => {
+          if (s.cash_part !== undefined) return a + s.cash_part;
+          if (s.payment_method === 'Efectivo') return a + (s.total || 0);
+          return a;
+      }, 0);
       
       const badge = document.getElementById('top-cash-badge');
       if (badge) {
@@ -3150,6 +3200,7 @@ function renderCashierPOS() {
   }
 
   let currentCashReceived = 0;
+  let currentTransferReceived = 0;
 
   function openPaymentModal() {
     if (!cart.length) return;
@@ -3160,12 +3211,33 @@ function renderCashierPOS() {
     document.getElementById('payment-paid').textContent = currency(0);
     document.getElementById('pay-amount-to-collect').value = total;
     
-    // 👇 ESTAS SON LAS LÍNEAS QUE FALTABAN 👇
     const inputCash = document.getElementById('pay-cash-received');
+    const inputTransfer = document.getElementById('pay-transfer-received');
+    const cashContainer = document.getElementById('cash-input-container');
+    const transferContainer = document.getElementById('transfer-input-container');
+
     inputCash.value = ''; 
+    inputTransfer.value = '';
+    currentCashReceived = 0;
+    currentTransferReceived = 0;
+
     document.getElementById('pay-tracking-number').value = '';
     document.getElementById('pay-change-returned').textContent = currency(0);
-    // 👆 ================================= 👆
+
+    // Ajustar campos según método
+    if (paymentMethod === 'Efectivo') {
+        cashContainer.style.display = 'block';
+        transferContainer.style.display = 'none';
+        setTimeout(() => inputCash.focus(), 100);
+    } else if (paymentMethod === 'Transfer') {
+        cashContainer.style.display = 'none';
+        transferContainer.style.display = 'block';
+        setTimeout(() => inputTransfer.focus(), 100);
+    } else if (paymentMethod === 'Mixto') {
+        cashContainer.style.display = 'block';
+        transferContainer.style.display = 'block';
+        setTimeout(() => inputTransfer.focus(), 100);
+    }
 
     const evidenceFile = document.getElementById('pay-evidence-file');
     evidenceFile.value = '';
@@ -3174,18 +3246,6 @@ function renderCashierPOS() {
     evidenceFile.onchange = async (e) => {
       if (e.target.files[0]) {
         showToast('Comprimiendo foto al máximo...', 'info');
-        // Utilizamos tu función compressImage que ya comprime a 300px en WebP
-        const base64 = await compressImage(e.target.files[0]);
-        document.getElementById('pay-evidence-base64').value = base64;
-        showToast('Evidencia lista', 'success');
-      }
-    };
-    document.getElementById('pay-evidence-base64').value = '';
-
-    evidenceFile.onchange = async (e) => {
-      if (e.target.files[0]) {
-        showToast('Comprimiendo foto al máximo...', 'info');
-        // Utilizamos tu función compressImage que ya comprime a 300px en WebP (máxima compresión sin perder nitidez)
         const base64 = await compressImage(e.target.files[0]);
         document.getElementById('pay-evidence-base64').value = base64;
         showToast('Evidencia lista', 'success');
@@ -3199,23 +3259,28 @@ function renderCashierPOS() {
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     
-    setTimeout(() => inputCash.focus(), 100);
-    
-    inputCash.oninput = (e) => {
-      const val = parseFloat(e.target.value) || 0;
-      currentCashReceived = val;
-      document.getElementById('payment-paid').textContent = currency(val);
+    const calculateTotals = () => {
+      const valCash = parseFloat(inputCash.value) || 0;
+      const valTransfer = parseFloat(inputTransfer.value) || 0;
+      currentCashReceived = paymentMethod === 'Transfer' ? 0 : valCash;
+      currentTransferReceived = paymentMethod === 'Efectivo' ? 0 : valTransfer;
       
-      if (val >= total) {
+      const totalPaid = currentCashReceived + currentTransferReceived;
+      document.getElementById('payment-paid').textContent = currency(totalPaid);
+      
+      if (totalPaid >= total) {
         document.getElementById('payment-remaining').textContent = currency(0);
-        document.getElementById('pay-change-returned').textContent = currency(val - total);
+        document.getElementById('pay-change-returned').textContent = currency(totalPaid - total);
         btnConfirm.disabled = false;
       } else {
-        document.getElementById('payment-remaining').textContent = currency(total - val);
+        document.getElementById('payment-remaining').textContent = currency(total - totalPaid);
         document.getElementById('pay-change-returned').textContent = currency(0);
         btnConfirm.disabled = true;
       }
     };
+
+    inputCash.oninput = calculateTotals;
+    inputTransfer.oninput = calculateTotals;
     
     document.getElementById('pay-cancel').onclick = () => {
       modal.classList.remove('flex');
@@ -3225,17 +3290,16 @@ function renderCashierPOS() {
     btnConfirm.onclick = () => {
       btnConfirm.disabled = true;
       btnConfirm.textContent = 'Procesando...';
-      processCheckoutAndShowReceipt(total, currentCashReceived);
+      processCheckoutAndShowReceipt(total, currentCashReceived, currentTransferReceived);
     };
   }
 
-  async function processCheckoutAndShowReceipt(total, cashReceived) {
+  async function processCheckoutAndShowReceipt(total, cashReceived, transferReceived) {
     try {
       const ticketNum = Math.floor(Math.random() * 9000) + 1000; 
       const dateOpts = { day: 'numeric', month: 'numeric', year: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true };
       const dateTime = new Date().toLocaleString('es-MX', dateOpts);
 
-      // 1. ACTUALIZAR EL INVENTARIO AL INSTANTE (RAM y Nube)
       for (const item of cart) {
         const prodRec = allRecords.find(r => r.id === item.id);
         if (prodRec) {
@@ -3244,36 +3308,47 @@ function renderCashierPOS() {
         }
       }
 
-     // 👇 ESTA LÍNEA ES LA QUE FALTABA 👇
-     const trackingNumber = document.getElementById('pay-tracking-number').value.trim();
+      const trackingNumber = document.getElementById('pay-tracking-number').value.trim();
+      const evidenceImage = document.getElementById('pay-evidence-base64').value;
+      const deleteAt = new Date();
+      deleteAt.setMonth(deleteAt.getMonth() + 2);
 
-const evidenceImage = document.getElementById('pay-evidence-base64').value;
-const deleteAt = new Date();
-deleteAt.setMonth(deleteAt.getMonth() + 2); // Tiempo de vida de 2 meses
+      // Calcular partes exactas (el cambio se da del efectivo)
+      const totalPaid = cashReceived + transferReceived;
+      const change = totalPaid - total;
+      
+      let cashPart = 0;
+      let transferPart = 0;
+      if (paymentMethod === 'Efectivo') cashPart = total;
+      else if (paymentMethod === 'Transfer') transferPart = total;
+      else {
+          transferPart = transferReceived; // La transferencia suele ser exacta
+          cashPart = total - transferPart; // El resto se cubre con el efectivo neto
+      }
 
-// 2. AGRUPAR TODO EN UN SOLO TICKET (1 sola escritura)
 const newTicket = {
-type: 'sale',
-ticket_num: ticketNum,
-tracking_number: trackingNumber, // <--- AHORA SÍ LA ENCONTRARÁ
+   type: 'sale',
+   ticket_num: ticketNum,
+   tracking_number: trackingNumber, 
    evidence_image: evidenceImage || null,
    evidence_delete_at: evidenceImage ? deleteAt.toISOString() : null,
    cashier: currentUser?.username || 'cajero',
-// ... (resto del código intacto)
         date: now(),
         total: total, 
         order_total: total,
         payment_method: paymentMethod,
         cash_received: cashReceived,
-        change_returned: cashReceived - total,
+        transfer_received: transferReceived,
+        cash_part: cashPart, // <--- Cuánto efectivo real entró a caja
+        transfer_part: transferPart, // <--- Cuánta transferencia real entró
+        change_returned: change,
         status: 'completed',
-        // ¡Aquí guardamos los artículos como una lista con sus costos!
         items: cart.map(item => ({
           id: item.id,
           name: item.name,
           quantity: item.qty,
           sell_price: item.sell_price,
-          buy_price: item.buy_price || 0, // <-- ESTA LÍNEA ES LA NUEVA
+          buy_price: item.buy_price || 0,
           total: item.sell_price * item.qty
         }))
       };
@@ -3328,8 +3403,13 @@ tracking_number: trackingNumber, // <--- AHORA SÍ LA ENCONTRARÁ
        <div class="w-full border-t border-solid border-gray-300 mb-2"></div>
        <div class="w-full text-xs space-y-1">
         <div class="font-bold text-center mb-1">DETALLE DE PAGO</div>
-        <div class="flex justify-between"><span>PAGÓ CON (${paymentMethod}):</span><span>${currency(cashReceived)}</span></div>
-        <div class="flex justify-between font-bold text-sm mt-1"><span>SU CAMBIO:</span><span>${currency(cashReceived - total)}</span></div>
+        ${paymentMethod === 'Mixto' ? `
+          <div class="flex justify-between"><span>TRANSFERENCIA:</span><span>${currency(transferReceived)}</span></div>
+          <div class="flex justify-between"><span>EFECTIVO:</span><span>${currency(cashReceived)}</span></div>
+        ` : `
+          <div class="flex justify-between"><span>PAGÓ CON (${paymentMethod}):</span><span>${currency(paymentMethod==='Efectivo'?cashReceived:transferReceived)}</span></div>
+        `}
+        <div class="flex justify-between font-bold text-sm mt-1"><span>SU CAMBIO:</span><span>${currency(change)}</span></div>
        </div>
        <div class="w-full border-t-2 border-dashed border-gray-400 mt-3 mb-2"></div>
        <div class="text-center text-xs space-y-1">
@@ -3364,6 +3444,10 @@ tracking_number: trackingNumber, // <--- AHORA SÍ LA ENCONTRARÁ
       document.getElementById('btn-print-ticket').classList.remove('col-span-2');
       const waTrackingText = trackingNumber ? `📦 *RASTREO:* ${trackingNumber}\n` : '';
       
+      const waPaymentText = paymentMethod === 'Mixto' 
+        ? `TRANSFERENCIA: ${currency(transferReceived)}\nEFECTIVO: ${currency(cashReceived)}` 
+        : `PAGÓ CON (${paymentMethod}): ${currency(paymentMethod==='Efectivo'?cashReceived:transferReceived)}`;
+
       const waText = `*${bizName()}*\n` +
         `TICKET DE VENTA\n` +
         `Fecha: ${dateTime}\n` +
@@ -3373,8 +3457,8 @@ tracking_number: trackingNumber, // <--- AHORA SÍ LA ENCONTRARÁ
         cart.map(i => `${i.qty}x ${i.name} = ${currency(i.sell_price * i.qty)}`).join('\n') + `\n` +
         `----------------------\n` +
         `*TOTAL: ${currency(total)}*\n` +
-        `PAGÓ CON (${paymentMethod}): ${currency(cashReceived)}\n` +
-        `CAMBIO: ${currency(cashReceived - total)}\n` +
+        waPaymentText + `\n` +
+        `CAMBIO: ${currency(change)}\n` +
         `----------------------\n` +
         `¡GRACIAS POR SU COMPRA!`;
 
@@ -3592,11 +3676,23 @@ document.getElementById('receipt-close').onclick = () => {
   document.getElementById('receipt-modal').classList.add('hidden');
 };
 }
-  function renderCashierClose() {
+function renderCashierClose() {
     const mySales = records('sale').filter(s => s.cashier === (currentUser?.username||'') && sessionStart && s.date >= sessionStart);
     const salesTotal = mySales.reduce((a,s)=>a+(s.total||0),0);
-    const cashSales = mySales.filter(s=>s.payment_method==='Efectivo').reduce((a,s)=>a+(s.total||0),0);
-    const transferSales = mySales.filter(s=>s.payment_method==='Transfer').reduce((a,s)=>a+(s.total||0),0);
+    
+    // REEMPLAZA LOS CÁLCULOS POR ESTOS NUEVOS:
+    const cashSales = mySales.reduce((a,s) => {
+        if (s.cash_part !== undefined) return a + s.cash_part;
+        if (s.payment_method === 'Efectivo') return a + (s.total || 0);
+        return a;
+    }, 0);
+    
+    const transferSales = mySales.reduce((a,s) => {
+        if (s.transfer_part !== undefined) return a + s.transfer_part;
+        if (s.payment_method === 'Transfer') return a + (s.total || 0);
+        return a;
+    }, 0);
+    
     const expectedCash = initialCash + cashSales;
 
     posContent.innerHTML = `
