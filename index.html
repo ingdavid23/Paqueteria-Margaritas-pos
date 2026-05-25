@@ -3757,20 +3757,21 @@ const newTicket = {
     
     // === Agrupar por Tickets para el Cajero ===
     const ticketMap = new Map();
-  todayMySales.forEach(s => { // <--- AQUÍ ESTÁ EL CAMBIO QUE REVIVE LA PESTAÑA
-    const tId = s.ticket_num || s.id;
-    if(!ticketMap.has(tId)) {
-      ticketMap.set(tId, {
-        id: s.id, 
-        ticket_num: s.ticket_num,
-        tracking_number: s.tracking_number, // <--- JALAMOS EL RASTREO AQUÍ
-        date: s.date,
-        payment_method: s.payment_method,
-        cashier: s.cashier,
-        order_total: s.order_total || s.total,
-        raw_sales: [] 
-      });
-    }
+    todayMySales.forEach(s => { // <--- AQUÍ ESTÁ EL CAMBIO QUE REVIVE LA PESTAÑA
+        const tId = s.ticket_num || s.id;
+        if(!ticketMap.has(tId)) {
+          ticketMap.set(tId, {
+            id: s.id, 
+            ticket_num: s.ticket_num,
+            tracking_number: s.tracking_number, // <--- JALAMOS EL RASTREO AQUÍ
+            is_invoiceable: s.is_invoiceable === true || String(s.is_invoiceable) === 'true', // <--- ESTO ES LO QUE FALTABA JALAR
+            date: s.date,
+            payment_method: s.payment_method,
+            cashier: s.cashier,
+            order_total: s.order_total || s.total,
+            raw_sales: [] 
+          });
+        }
       
       // 🔥 SOLUCIÓN: Magia de desempaquetado para Súper-Tickets y ventas viejas
       if (s.items && Array.isArray(s.items)) {
