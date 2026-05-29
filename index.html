@@ -1241,23 +1241,49 @@ function renderLogin() {
     initialCash = parseFloat(localStorage.getItem(`pos_initial_cash_${user.username}`)) || 0;
     sessionStart = localStorage.getItem(`pos_session_start_${user.username}`) || null;
     
-    if (user.role === 'admin') { currentView = 'admin-dashboard'; } else { currentView = 'cashier-pos'; }
+    if (user.role === 'admin') { 
+        const perms = user.raw && user.raw.permissions ? user.raw.permissions : null;
+        if (perms && perms.length > 0 && !perms.includes('admin-dashboard')) {
+            currentView = perms[0]; // Lo manda a la primera pestaña que tiene permitida
+        } else {
+            currentView = 'admin-dashboard'; 
+        }
+    } else { 
+        currentView = 'cashier-pos'; 
+    }
     localStorage.setItem('pos_view', currentView); render();
   };
-  document.getElementById('login-pass').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('login-btn').click(); });
 }
 
 // ========== ADMIN SHELL ==========
+// ========== ADMIN SHELL ==========
 function renderAdminShell(contentFn) {
-    const navItems = [
+  const allNavItems = [
     { id:'admin-dashboard', icon:'layout-dashboard', label:'Dashboard' },
     { id:'admin-inventory', icon:'package', label:'Inventario' },
     { id:'admin-sales', icon:'receipt', label:'Ventas y Reportes' },
     { id:'admin-finance', icon:'wallet', label:'Finanzas' },
-    { id:'admin-invoicing', icon:'file-text', label:'Facturación' }, // <--- NUEVA LÍNEA
+    { id:'admin-invoicing', icon:'file-text', label:'Facturación' }, 
     { id:'admin-users', icon:'users', label:'Usuarios' },
     { id:'admin-settings', icon:'settings', label:'Config' },
   ];
+
+  // Leemos los permisos del usuario de la base de datos (o le damos acceso total por default al admin principal)
+  const userPerms = (currentUser && currentUser.raw && currentUser.raw.permissions) 
+    ? currentUser.raw.permissions 
+    : allNavItems.map(n => n.id);
+
+  // Filtramos las pestañas que puede ver
+  const navItems = allNavItems.filter(n => userPerms.includes(n.id));
+
+  // Si trata de entrar a un link prohibido guardado en memoria, lo sacamos de ahí
+  if (navItems.length > 0 && !navItems.find(n => n.id === currentView)) {
+     currentView = navItems[0].id;
+     localStorage.setItem('pos_view', currentView);
+     setTimeout(render, 0); // Recargamos para evitar errores
+     return; 
+  }
+
   app.innerHTML = `
   <div class="h-full w-full flex flex-col overflow-hidden" style="min-height:100%;">
     
@@ -2996,7 +3022,7 @@ function renderUsersAdmin(container) {
     </div>
     <div class="bg-surface rounded-xl p-5 border border-card">
       <h3 id="u-form-title" class="font-semibold mb-3">Agregar Cajero</h3>
-      <form id="user-form" class="flex flex-wrap gap-3 items-end">
+     <form id="user-form" class="flex flex-wrap gap-3 items-end">
         <div>
           <label class="block text-xs text-muted mb-1">Nombre Real</label>
           <input id="u-name" class="bg-card border border-card rounded-lg px-3 py-2 text-sm focus:border-accent focus:outline-none" placeholder="Nombre completo" required>
@@ -3019,6 +3045,20 @@ function renderUsersAdmin(container) {
         <div class="flex gap-2">
           <button type="submit" id="u-btn" class="bg-accent text-bg font-semibold px-4 py-2 rounded-lg hover:opacity-90 transition text-sm">Agregar</button>
           <button type="button" id="u-cancel" class="bg-card text-muted px-3 py-2 rounded-lg hover:bg-bg transition text-sm hidden">Cancelar</button>
+        </div>
+        
+        <!-- NUEVO BLOQUE DE PERMISOS -->
+        <div class="w-full mt-2 hidden border-t border-card pt-3" id="permissions-container">
+          <label class="block text-xs text-muted mb-2 font-bold uppercase">Permisos de Administrador (Pestañas Visibles)</label>
+          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 bg-card/30 p-3 rounded-xl border border-card">
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="u-perm" value="admin-dashboard" class="w-4 h-4 text-accent" checked> <span class="text-sm font-medium">Dashboard</span></label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="u-perm" value="admin-inventory" class="w-4 h-4 text-accent" checked> <span class="text-sm font-medium">Inventario</span></label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="u-perm" value="admin-sales" class="w-4 h-4 text-accent" checked> <span class="text-sm font-medium">Ventas/Reportes</span></label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="u-perm" value="admin-finance" class="w-4 h-4 text-accent" checked> <span class="text-sm font-medium">Finanzas</span></label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="u-perm" value="admin-invoicing" class="w-4 h-4 text-accent" checked> <span class="text-sm font-medium">Facturación</span></label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="u-perm" value="admin-users" class="w-4 h-4 text-accent" checked> <span class="text-sm font-medium">Usuarios</span></label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="u-perm" value="admin-settings" class="w-4 h-4 text-accent" checked> <span class="text-sm font-medium">Configuración</span></label>
+          </div>
         </div>
       </form>
     </div>
@@ -3047,6 +3087,12 @@ function renderUsersAdmin(container) {
     </div>
   </div>`;
 
+  document.getElementById('u-role').onchange = (e) => {
+    const permContainer = document.getElementById('permissions-container');
+    if (e.target.value === 'admin') permContainer.classList.remove('hidden');
+    else permContainer.classList.add('hidden');
+  };
+
   window.editUser = (username) => {
     editingUser = getUsers().find(u => u.username === username);
     if (editingUser) {
@@ -3054,7 +3100,15 @@ function renderUsersAdmin(container) {
       document.getElementById('u-user').value = editingUser.username;
       document.getElementById('u-pass').value = editingUser.password;
       document.getElementById('u-role').value = editingUser.role;
+      document.getElementById('u-role').dispatchEvent(new Event('change')); // Mostrar/Ocultar permisos
       
+      const allPerms = ['admin-dashboard', 'admin-inventory', 'admin-sales', 'admin-finance', 'admin-invoicing', 'admin-users', 'admin-settings'];
+      const userPerms = editingUser.raw && editingUser.raw.permissions ? editingUser.raw.permissions : allPerms;
+      
+      document.querySelectorAll('input[name="u-perm"]').forEach(cb => {
+          cb.checked = userPerms.includes(cb.value);
+      });
+
       document.getElementById('u-form-title').textContent = 'Editar Usuario';
       document.getElementById('u-btn').textContent = 'Actualizar';
       document.getElementById('u-cancel').classList.remove('hidden');
@@ -3067,7 +3121,6 @@ function renderUsersAdmin(container) {
         document.getElementById('u-user').readOnly = false;
         document.getElementById('u-user').classList.remove('opacity-50', 'cursor-not-allowed');
       }
-      
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
@@ -3085,6 +3138,10 @@ function renderUsersAdmin(container) {
   document.getElementById('u-cancel').onclick = () => {
     editingUser = null;
     document.getElementById('user-form').reset();
+    document.getElementById('u-role').value = 'cashier';
+    document.getElementById('u-role').dispatchEvent(new Event('change'));
+    document.querySelectorAll('input[name="u-perm"]').forEach(cb => cb.checked = true);
+    
     document.getElementById('u-form-title').textContent = 'Agregar Cajero';
     document.getElementById('u-btn').textContent = 'Agregar';
     document.getElementById('u-cancel').classList.add('hidden');
@@ -3102,7 +3159,6 @@ function renderUsersAdmin(container) {
     if (!name || !username || !pass) { showToast('Completa todos los campos', 'warn'); return; }
     
     const freshUsers = getUsers();
-
     if (!editingUser) {
       if (freshUsers.find(u => u.username === username)) { 
         showToast('Ese ID de Usuario ya existe', 'warn'); 
@@ -3113,11 +3169,17 @@ function renderUsersAdmin(container) {
     const btn = document.getElementById('u-btn');
     btn.disabled = true; btn.textContent = 'Guardando...';
 
+    // Jalar permisos solo si es admin
+    const permissions = role === 'admin' 
+        ? Array.from(document.querySelectorAll('input[name="u-perm"]:checked')).map(cb => cb.value)
+        : [];
+
     const data = {
       type: 'user', name: username, code: pass, category: '', buy_price: 0, sell_price: 0,
       stock: 0, min_stock: 0, quantity: 0, total: 0, payment_method: '', cashier: '',
       date: now(), amount: 0, description: name, status: role,
-      initial_cash: 0, final_cash: 0, sales_total: 0
+      initial_cash: 0, final_cash: 0, sales_total: 0,
+      permissions: permissions // <--- AQUI GUARDAMOS LOS PERMISOS EN BD
     };
 
     if (editingUser) {
@@ -3132,17 +3194,9 @@ function renderUsersAdmin(container) {
       showToast('Usuario creado exitosamente');
     }
     
-    editingUser = null;
-    document.getElementById('user-form').reset();
-    document.getElementById('u-user').readOnly = false;
-    document.getElementById('u-user').classList.remove('opacity-50', 'cursor-not-allowed');
-    document.getElementById('u-form-title').textContent = 'Agregar Cajero';
-    document.getElementById('u-btn').textContent = 'Agregar';
-    document.getElementById('u-cancel').classList.add('hidden');
+    document.getElementById('u-cancel').click(); // Resetea y oculta todo de forma limpia
     btn.disabled = false;
   };
-
-  lucide.createIcons();
 }
 
 // ========== SETTINGS (NUBE + LOGO) ==========
