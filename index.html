@@ -4325,10 +4325,23 @@ function renderCashierClose() {
 
     const expectedCash = initialCash + cashSales + totalCashIn - totalCashOut;
 
+    // === NUEVO: FORMATO DE FECHA PARA EL CORTE ===
+    const fechaCorte = new Date().toLocaleString('es-MX', { 
+        day: '2-digit', month: '2-digit', year: 'numeric', 
+        hour: '2-digit', minute: '2-digit', hour12: true 
+    });
+
     posContent.innerHTML = `
     <div class="p-4 fade-in space-y-4 max-w-lg mx-auto">
       <h2 class="text-xl font-bold text-center">Corte de Caja</h2>
-      <div class="bg-surface rounded-xl p-5 border border-card space-y-4 shadow-md">
+      
+      <div id="corte-ticket" class="bg-surface rounded-xl p-5 border border-card space-y-4 shadow-md bg-white">
+        <div id="corte-title" class="text-center font-bold text-lg border-b border-card pb-2 hidden">${bizName()} - CORTE DE CAJA</div>
+        
+        <div class="text-center text-sm text-muted border-b border-card pb-3 mb-2">
+            Fecha de corte: <span class="font-bold text-txt">${fechaCorte}</span>
+        </div>
+        
         <div class="flex justify-between"><span class="text-muted">Fondo inicial:</span><span class="font-semibold">${currency(initialCash)}</span></div>
         <div class="flex justify-between"><span class="text-muted">Ventas de este turno:</span><span class="font-semibold text-success">${currency(salesTotal)}</span></div>
         <div class="border-t border-card pt-3 space-y-2">
@@ -4340,16 +4353,25 @@ function renderCashierClose() {
           ${totalCashIn > 0 ? `<div class="flex justify-between text-sm"><span class="text-muted">Entradas Extras (Fondo, etc):</span><span class="text-success">+${currency(totalCashIn)}</span></div>` : ''}
           ${totalCashOut > 0 ? `<div class="flex justify-between text-sm"><span class="text-muted">Salidas / Gastos pagados:</span><span class="text-danger">-${currency(totalCashOut)}</span></div>` : ''}
         </div>` : ''}
+        
         <div class="border-t border-card pt-3 flex justify-between text-lg font-bold">
-          <span>Efectivo total en caja esperado:</span><span class="text-accent">${currency(expectedCash)}</span>
+          <span>Efectivo en caja esperado:</span><span class="text-accent">${currency(expectedCash)}</span>
         </div>
-        <div>
-          <label class="block text-sm text-muted mb-1">Efectivo en caja REAL (billetes y monedas):</label>
+        
+        <div id="input-cash-section">
+          <label class="block text-sm text-muted mb-1 mt-2">Efectivo en caja REAL (billetes y monedas):</label>
           <input id="real-cash" type="number" step="0.01" class="w-full bg-bg border border-card rounded-lg px-4 py-3 text-center text-xl font-bold focus:border-accent focus:outline-none" value="${expectedCash.toFixed(2)}">
         </div>
-        <div id="diff-display" class="text-center text-sm font-semibold"></div>
-        <button id="close-register" class="w-full bg-warn text-bg font-bold py-3 rounded-lg hover:opacity-90 transition flex justify-center items-center gap-2 mt-4 shadow-lg">
-          <i data-lucide="lock" class="w-5 h-5"></i> Cerrar y Enviar WhatsApp
+        <div id="diff-display" class="text-center text-sm font-semibold mb-2"></div>
+      </div>
+
+      <div class="bg-surface rounded-xl p-5 border border-card shadow-md mt-4">
+        <div class="mb-4">
+          <label class="block text-sm font-bold text-txt mb-1">Enviar comprobante a (Correo):</label>
+          <input id="close-email" type="email" class="w-full bg-card border border-card rounded-lg px-4 py-3 text-sm focus:border-accent focus:outline-none" placeholder="administracion@minegocio.com">
+        </div>
+        <button id="close-register" class="w-full bg-warn text-bg font-bold py-3 rounded-lg hover:opacity-90 transition flex justify-center items-center gap-2 shadow-lg">
+          <i data-lucide="mail" class="w-5 h-5"></i> Cerrar Caja y Descargar Corte
         </button>
       </div>
     </div>`;
@@ -4368,40 +4390,59 @@ function renderCashierClose() {
 
     document.getElementById('close-register').onclick = async () => {
       const btn = document.getElementById('close-register');
-      btn.disabled = true; btn.textContent = 'Cerrando Caja...';
+      btn.disabled = true; btn.innerHTML = '<i data-lucide="loader" class="w-5 h-5 animate-spin"></i> Procesando comprobante...';
+      lucide.createIcons();
       
       const realCash = parseFloat(realInput.value) || 0;
       const diff = realCash - expectedCash;
       const currentSessionStart = sessionStart; 
       const userToClean = currentUser.username;
+      const emailTarget = document.getElementById('close-email').value.trim();
 
       try {
-        if (defaultConfig.whatsapp_number) {
-          const cleanNumber = String(defaultConfig.whatsapp_number).replace(/\D/g, ''); 
-          if (cleanNumber) {
-            const waText = `*CORTE DE CAJA - ${bizName()}*%0A` +
-              `Cajero: ${userToClean}%0A` +
-              `Apertura: ${new Date(currentSessionStart || now()).toLocaleString('es-MX')}%0A` +
-              `Cierre: ${new Date().toLocaleString('es-MX')}%0A` +
-              `-------------------%0A` +
-              `Fondo inicial: ${currency(initialCash)}%0A` +
-              `Ventas Efectivo: ${currency(cashSales)}%0A` +
-              `Ventas Transferencia: ${currency(transferSales)}%0A` +
-              `Entradas Extras: ${currency(totalCashIn)}%0A` +
-              `Salidas / Gastos: ${currency(totalCashOut)}%0A` +
-              `*Total Mercancía Vendida: ${currency(salesTotal)}*%0A` +
-              `-------------------%0A` +
-              `Efectivo Esperado: ${currency(expectedCash)}%0A` +
-              `Efectivo Real: ${currency(realCash)}%0A` +
-              `*Diferencia: ${currency(diff)}* ${diff >= 0 ? '✅' : '⚠️'}`;
+        // --- 1. PREPARAR EL RECUADRO PARA LA "FOTO" ---
+        document.getElementById('corte-title').classList.remove('hidden'); // Mostramos el título
+        
+        // Sustituimos la caja de texto editable por puro texto estático para el PDF
+        document.getElementById('input-cash-section').innerHTML = `
+          <div class="flex justify-between items-center bg-gray-100 p-2 rounded mt-2">
+            <span class="text-sm font-bold text-muted">Efectivo REAL contado:</span>
+            <span class="text-xl font-bold">${currency(realCash)}</span>
+          </div>`;
 
-            window.open(`https://wa.me/${cleanNumber}?text=${waText}`, '_blank');
-          }
+        // Esperamos unos milisegundos a que los estilos se apliquen antes de capturar
+        await new Promise(r => setTimeout(r, 300));
+
+        // --- 2. GENERAR Y DESCARGAR EL PDF INALTERABLE ---
+        const element = document.getElementById('corte-ticket');
+        const opt = {
+          margin:       0.5,
+          filename:     `Corte_Caja_${userToClean}_${today()}.pdf`,
+          image:        { type: 'jpeg', quality: 0.98 },
+          html2canvas:  { scale: 2 },
+          jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+        };
+        
+        await html2pdf().set(opt).from(element).save();
+
+        // --- 3. ABRIR EL CORREO PARA QUE ADJUNTEN EL PDF ---
+        if (emailTarget) {
+          const subject = encodeURIComponent(`Corte de Caja - ${bizName()} - ${new Date().toLocaleDateString('es-MX')}`);
+          const bodyEncoded = encodeURIComponent(
+            `Hola,\n\n` +
+            `El cajero "${userToClean}" ha cerrado su turno.\n\n` +
+            `Por favor, encuentra adjunto a este correo el comprobante inalterable del corte de caja en formato PDF.\n\n` +
+            `⚠️ NOTA PARA EL CAJERO: Arrastra o adjunta el archivo que se acaba de descargar en tu computadora antes de darle a Enviar.\n\n` +
+            `Saludos.`
+          );
+          
+          window.location.href = `mailto:${emailTarget}?subject=${subject}&body=${bodyEncoded}`;
         }
       } catch (err) {
-        console.error('Error al generar WhatsApp:', err);
+        console.error('Error al generar comprobante:', err);
       }
 
+      // --- 4. GUARDAR EN LA NUBE (FIREBASE) ---
       await dbSdk.create({
         type:'cash_close', name: userToClean||'cajero', code:'', category:'', buy_price:0, sell_price:0, stock:0, min_stock:0,
         quantity: mySales.length, total: salesTotal, payment_method:'', cashier: userToClean||'', date: now(), amount: diff,
@@ -4427,8 +4468,8 @@ function renderCashierClose() {
       currentUser = null; 
       sessionStart = null;
       
-      showToast('Caja cerrada correctamente');
-      setTimeout(() => render(), 500);
+      showToast('Caja cerrada y PDF generado');
+      setTimeout(() => render(), 800);
     };
 }
 
