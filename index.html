@@ -1175,7 +1175,10 @@ function render() {
     case 'login': renderLogin(); break;
     case 'admin-dashboard': renderAdminShell(renderDashboard); break;
     case 'admin-inventory': renderAdminShell(renderInventory); break;
+    // 👇 ESTA ES LA LÍNEA NUEVA 👇
+    case 'admin-departments': renderAdminShell(renderDepartments); break;
     case 'admin-sales': renderAdminShell(renderSalesReport); break;
+    // ... el resto sigue igual
     case 'admin-finance': renderAdminShell(renderFinance); break;
     case 'admin-invoicing': renderAdminShell(renderInvoicing); break; // <--- NUEVA LÍNEA
     case 'admin-users': renderAdminShell(renderUsersAdmin); break;
@@ -1260,18 +1263,18 @@ function renderLogin() {
 }
 
 // ========== ADMIN SHELL ==========
-// ========== ADMIN SHELL ==========
 function renderAdminShell(contentFn) {
   const allNavItems = [
     { id:'admin-dashboard', icon:'layout-dashboard', label:'Dashboard' },
     { id:'admin-inventory', icon:'package', label:'Inventario' },
+    // 👇 ESTA ES LA LÍNEA NUEVA 👇
+    { id:'admin-departments', icon:'layers', label:'Departamentos' }, 
     { id:'admin-sales', icon:'receipt', label:'Ventas y Reportes' },
     { id:'admin-finance', icon:'wallet', label:'Finanzas' },
     { id:'admin-invoicing', icon:'file-text', label:'Facturación' }, 
     { id:'admin-users', icon:'users', label:'Usuarios' },
     { id:'admin-settings', icon:'settings', label:'Config' },
   ];
-
   // Leemos los permisos del usuario de la base de datos (o le damos acceso total por default al admin principal)
   const userPerms = (currentUser && currentUser.raw && currentUser.raw.permissions) 
     ? currentUser.raw.permissions 
@@ -3107,7 +3110,8 @@ function renderUsersAdmin(container) {
         <!-- NUEVO BLOQUE DE PERMISOS -->
         <div class="w-full mt-2 hidden border-t border-card pt-3" id="permissions-container">
           <label class="block text-xs text-muted mb-2 font-bold uppercase">Permisos de Administrador (Pestañas Visibles)</label>
-          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 bg-card/30 p-3 rounded-xl border border-card">
+         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 bg-card/30 p-3 rounded-xl border border-card">
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="u-perm" value="admin-departments" class="w-4 h-4 text-accent" checked> <span class="text-sm font-medium">Departamentos</span></label>
             <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="u-perm" value="admin-dashboard" class="w-4 h-4 text-accent" checked> <span class="text-sm font-medium">Dashboard</span></label>
             <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="u-perm" value="admin-inventory" class="w-4 h-4 text-accent" checked> <span class="text-sm font-medium">Inventario</span></label>
             <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="u-perm" value="admin-sales" class="w-4 h-4 text-accent" checked> <span class="text-sm font-medium">Ventas/Reportes</span></label>
@@ -3159,7 +3163,8 @@ function renderUsersAdmin(container) {
       document.getElementById('u-role').value = editingUser.role;
       document.getElementById('u-role').dispatchEvent(new Event('change')); // Mostrar/Ocultar permisos
       
-      const allPerms = ['admin-dashboard', 'admin-inventory', 'admin-sales', 'admin-finance', 'admin-invoicing', 'admin-users', 'admin-settings'];
+     // Agrega 'admin-departments' al inicio de esta lista
+     const allPerms = ['admin-departments', 'admin-dashboard', 'admin-inventory', 'admin-sales', 'admin-finance', 'admin-invoicing', 'admin-users', 'admin-settings'];
       const userPerms = editingUser.raw && editingUser.raw.permissions ? editingUser.raw.permissions : allPerms;
       
       document.querySelectorAll('input[name="u-perm"]').forEach(cb => {
@@ -4320,22 +4325,27 @@ function renderCashierClose() {
     
     // Calcular Entradas y Salidas de Caja
     const myFlows = records('movement').filter(m => m.cashier === (currentUser?.username||'') && sessionStart && m.date >= sessionStart && (m.category === 'cash_in' || m.category === 'cash_out'));
-    const totalCashIn = myFlows.filter(m => m.category === 'cash_in').reduce((a,m) => a + (m.amount || 0), 0);
-    const totalCashOut = myFlows.filter(m => m.category === 'cash_out').reduce((a,m) => a + (m.amount || 0), 0);
+    const entradasList = myFlows.filter(m => m.category === 'cash_in');
+    const salidasList = myFlows.filter(m => m.category === 'cash_out');
+    
+    const totalCashIn = entradasList.reduce((a,m) => a + (m.amount || 0), 0);
+    const totalCashOut = salidasList.reduce((a,m) => a + (m.amount || 0), 0);
 
     const expectedCash = initialCash + cashSales + totalCashIn - totalCashOut;
 
-    // === NUEVO: FORMATO DE FECHA PARA EL CORTE ===
     const fechaCorte = new Date().toLocaleString('es-MX', { 
         day: '2-digit', month: '2-digit', year: 'numeric', 
         hour: '2-digit', minute: '2-digit', hour12: true 
     });
 
+    // Array de denominaciones en MXN (Billetes y monedas)
+    const denoms = [1000, 500, 200, 100, 50, 20, 10, 5, 2, 1, 0.5];
+
     posContent.innerHTML = `
     <div class="p-4 fade-in space-y-4 max-w-lg mx-auto">
       <h2 class="text-xl font-bold text-center">Corte de Caja</h2>
       
-      <div id="corte-ticket" class="bg-surface rounded-xl p-5 border border-card space-y-4 shadow-md bg-white">
+      <div id="corte-ticket" class="bg-surface rounded-xl p-5 border border-card space-y-3 shadow-md bg-white">
         <div id="corte-title" class="text-center font-bold text-lg border-b border-card pb-2 hidden">${bizName()} - CORTE DE CAJA</div>
         
         <div class="text-center text-sm text-muted border-b border-card pb-3 mb-2">
@@ -4344,25 +4354,81 @@ function renderCashierClose() {
         
         <div class="flex justify-between"><span class="text-muted">Fondo inicial:</span><span class="font-semibold">${currency(initialCash)}</span></div>
         <div class="flex justify-between"><span class="text-muted">Ventas de este turno:</span><span class="font-semibold text-success">${currency(salesTotal)}</span></div>
+        
         <div class="border-t border-card pt-3 space-y-2">
           <div class="flex justify-between text-sm"><span class="text-muted">Efectivo cobrado:</span><span>${currency(cashSales)}</span></div>
           <div class="flex justify-between text-sm"><span class="text-muted">Transferencias cobradas:</span><span>${currency(transferSales)}</span></div>
         </div>
-        ${(totalCashIn > 0 || totalCashOut > 0) ? `
-        <div class="border-t border-card pt-3 space-y-2">
-          ${totalCashIn > 0 ? `<div class="flex justify-between text-sm"><span class="text-muted">Entradas Extras (Fondo, etc):</span><span class="text-success">+${currency(totalCashIn)}</span></div>` : ''}
-          ${totalCashOut > 0 ? `<div class="flex justify-between text-sm"><span class="text-muted">Salidas / Gastos pagados:</span><span class="text-danger">-${currency(totalCashOut)}</span></div>` : ''}
+        
+        ${(entradasList.length > 0 || salidasList.length > 0) ? `
+        <div class="border-t border-card pt-3 space-y-4">
+          ${entradasList.length > 0 ? `
+            <div>
+              <div class="text-sm font-semibold text-txt mb-1">Entradas Extras:</div>
+              ${entradasList.map(m => `
+                <div class="flex justify-between text-xs ml-2 mb-1">
+                  <span class="text-muted truncate pr-2">• ${m.description || 'Entrada manual'}</span>
+                  <span class="text-success font-medium">+${currency(m.amount)}</span>
+                </div>
+              `).join('')}
+              <div class="flex justify-between text-sm font-bold mt-1 pt-1 border-t border-card/30">
+                <span class="text-muted">Subtotal Entradas:</span>
+                <span class="text-success">+${currency(totalCashIn)}</span>
+              </div>
+            </div>
+          ` : ''}
+          
+          ${salidasList.length > 0 ? `
+            <div>
+              <div class="text-sm font-semibold text-txt mb-1">Salidas / Gastos:</div>
+              ${salidasList.map(m => `
+                <div class="flex justify-between text-xs ml-2 mb-1">
+                  <span class="text-muted truncate pr-2">• ${m.description || 'Salida manual'}</span>
+                  <span class="text-danger font-medium">-${currency(m.amount)}</span>
+                </div>
+              `).join('')}
+              <div class="flex justify-between text-sm font-bold mt-1 pt-1 border-t border-card/30">
+                <span class="text-muted">Subtotal Salidas:</span>
+                <span class="text-danger">-${currency(totalCashOut)}</span>
+              </div>
+            </div>
+          ` : ''}
         </div>` : ''}
         
         <div class="border-t border-card pt-3 flex justify-between text-lg font-bold">
           <span>Efectivo en caja esperado:</span><span class="text-accent">${currency(expectedCash)}</span>
         </div>
         
-        <div id="input-cash-section">
-          <label class="block text-sm text-muted mb-1 mt-2">Efectivo en caja REAL (billetes y monedas):</label>
-          <input id="real-cash" type="number" step="0.01" class="w-full bg-bg border border-card rounded-lg px-4 py-3 text-center text-xl font-bold focus:border-accent focus:outline-none" value="${expectedCash.toFixed(2)}">
+        <div id="input-cash-section" class="mt-4 border border-card rounded-lg overflow-hidden">
+          <div class="bg-card/40 p-2 text-center text-xs font-bold text-txt uppercase tracking-wider">Arqueo de Efectivo Físico</div>
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-muted border-b border-card bg-surface">
+                <th class="p-2 text-left w-1/3">Denominación</th>
+                <th class="p-2 text-center w-1/3">Unidades</th>
+                <th class="p-2 text-right w-1/3">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody id="denom-tbody">
+              ${denoms.map(d => `
+                <tr class="border-b border-card/30 bg-surface">
+                  <td class="p-2 font-medium text-left">${currency(d)}</td>
+                  <td class="p-1">
+                    <input type="number" min="0" step="1" data-denom="${d}" class="w-full bg-bg border border-card rounded px-2 py-1.5 text-center font-bold focus:border-accent focus:outline-none denom-input" placeholder="0">
+                  </td>
+                  <td class="p-2 text-right font-semibold text-txt denom-subtotal" data-subtotal-for="${d}">$0.00</td>
+                </tr>
+              `).join('')}
+            </tbody>
+            <tfoot class="bg-card/20 border-t border-card">
+              <tr>
+                <td colspan="2" class="p-3 font-bold text-right text-muted">TOTAL CONTADO:</td>
+                <td class="p-3 font-black text-right text-accent text-lg" id="denom-grand-total">$0.00</td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
-        <div id="diff-display" class="text-center text-sm font-semibold mb-2"></div>
+        <div id="diff-display" class="text-center text-sm font-semibold mt-3 mb-2"></div>
       </div>
 
       <div class="bg-surface rounded-xl p-5 border border-card shadow-md mt-4">
@@ -4376,24 +4442,51 @@ function renderCashierClose() {
       </div>
     </div>`;
 
-    const realInput = document.getElementById('real-cash');
+    // LÓGICA DE CÁLCULO DE DENOMINACIONES
+    let realCashCalculated = 0;
+    const denomInputs = document.querySelectorAll('.denom-input');
+    const grandTotalDisplay = document.getElementById('denom-grand-total');
     const diffDisplay = document.getElementById('diff-display');
-    function updateDiff() {
-      const real = parseFloat(realInput.value) || 0;
-      const diff = real - expectedCash;
-      if (Math.abs(diff) < 0.01) diffDisplay.innerHTML = '<span class="text-success">✓ Sin diferencia (Caja cuadrada)</span>';
-      else if (diff > 0) diffDisplay.innerHTML = `<span class="text-accent">Sobrante en caja: ${currency(diff)}</span>`;
-      else diffDisplay.innerHTML = `<span class="text-danger">Faltante en caja: ${currency(Math.abs(diff))}</span>`;
+
+    function calculateDenoms() {
+        realCashCalculated = 0;
+        denomInputs.forEach(input => {
+            const denom = parseFloat(input.dataset.denom);
+            const qty = parseInt(input.value) || 0;
+            const subtotal = denom * qty;
+            realCashCalculated += subtotal;
+            
+            // Actualizar la fila individual
+            document.querySelector(`.denom-subtotal[data-subtotal-for="${denom}"]`).textContent = currency(subtotal);
+        });
+        
+        grandTotalDisplay.textContent = currency(realCashCalculated);
+        updateDiff();
     }
-    realInput.oninput = updateDiff;
-    updateDiff();
+
+    function updateDiff() {
+      const diff = realCashCalculated - expectedCash;
+      if (Math.abs(diff) < 0.01) diffDisplay.innerHTML = '<span class="text-success font-bold">✓ Sin diferencia (Caja cuadrada)</span>';
+      else if (diff > 0) diffDisplay.innerHTML = `<span class="text-accent font-bold">Sobrante en caja: ${currency(diff)}</span>`;
+      else diffDisplay.innerHTML = `<span class="text-danger font-bold">Faltante en caja: ${currency(Math.abs(diff))}</span>`;
+    }
+
+    // Escuchar cambios en cualquier input de billetes/monedas
+    denomInputs.forEach(input => {
+        input.addEventListener('input', calculateDenoms);
+        // Seleccionar todo el texto al dar clic para borrar más fácil
+        input.addEventListener('focus', function() { this.select(); });
+    });
+    
+    // Ejecutar cálculo inicial
+    calculateDenoms();
 
     document.getElementById('close-register').onclick = async () => {
       const btn = document.getElementById('close-register');
       btn.disabled = true; btn.innerHTML = '<i data-lucide="loader" class="w-5 h-5 animate-spin"></i> Procesando comprobante...';
       lucide.createIcons();
       
-      const realCash = parseFloat(realInput.value) || 0;
+      const realCash = realCashCalculated; // Usamos el valor calculado de la tabla de arqueo
       const diff = realCash - expectedCash;
       const currentSessionStart = sessionStart; 
       const userToClean = currentUser.username;
@@ -4401,19 +4494,19 @@ function renderCashierClose() {
 
       try {
         // --- 1. PREPARAR EL RECUADRO PARA LA "FOTO" ---
-        document.getElementById('corte-title').classList.remove('hidden'); // Mostramos el título
+        document.getElementById('corte-title').classList.remove('hidden'); 
         
-        // Sustituimos la caja de texto editable por puro texto estático para el PDF
-        document.getElementById('input-cash-section').innerHTML = `
-          <div class="flex justify-between items-center bg-gray-100 p-2 rounded mt-2">
-            <span class="text-sm font-bold text-muted">Efectivo REAL contado:</span>
-            <span class="text-xl font-bold">${currency(realCash)}</span>
-          </div>`;
+        // Transformar los inputs editables de la tabla en texto fijo para el PDF
+        document.querySelectorAll('.denom-input').forEach(input => {
+            const val = input.value || '0';
+            const parent = input.parentElement;
+            parent.innerHTML = `<span class="font-bold text-center block">${val}</span>`;
+        });
 
-        // Esperamos unos milisegundos a que los estilos se apliquen antes de capturar
+        // Esperamos unos milisegundos a que se aplique el cambio visual
         await new Promise(r => setTimeout(r, 300));
 
-        // --- 2. GENERAR Y DESCARGAR EL PDF INALTERABLE ---
+        // --- 2. GENERAR Y DESCARGAR EL PDF (MÉTODO SEGURO) ---
         const element = document.getElementById('corte-ticket');
         const opt = {
           margin:       0.5,
@@ -4423,20 +4516,20 @@ function renderCashierClose() {
           jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
         };
         
+        showToast('Generando PDF descargable...', 'info');
+        
+        // Forzamos la descarga directa (esto no falla)
         await html2pdf().set(opt).from(element).save();
 
-        // --- 3. ABRIR EL CORREO PARA QUE ADJUNTEN EL PDF ---
+        // --- 3. ABRIR EL CORREO ---
         if (emailTarget) {
-          const subject = encodeURIComponent(`Corte de Caja - ${bizName()} - ${new Date().toLocaleDateString('es-MX')}`);
-          const bodyEncoded = encodeURIComponent(
-            `Hola,\n\n` +
-            `El cajero "${userToClean}" ha cerrado su turno.\n\n` +
-            `Por favor, encuentra adjunto a este correo el comprobante inalterable del corte de caja en formato PDF.\n\n` +
-            `⚠️ NOTA PARA EL CAJERO: Arrastra o adjunta el archivo que se acaba de descargar en tu computadora antes de darle a Enviar.\n\n` +
-            `Saludos.`
-          );
-          
-          window.location.href = `mailto:${emailTarget}?subject=${subject}&body=${bodyEncoded}`;
+            const subjectStr = `Corte de Caja - ${bizName()} - ${new Date().toLocaleDateString('es-MX')}`;
+            const textStr = `Hola,\n\nEl cajero "${userToClean}" ha cerrado su turno.\n\nEncuentra adjunto a este correo el comprobante del corte de caja que se acaba de descargar en esta computadora.\n\nSaludos.`;
+            
+            // Damos un respiro de medio segundo para que la descarga termine de registrarse en el navegador
+            setTimeout(() => {
+                window.location.href = `mailto:${emailTarget}?subject=${encodeURIComponent(subjectStr)}&body=${encodeURIComponent(textStr)}`;
+            }, 500);
         }
       } catch (err) {
         console.error('Error al generar comprobante:', err);
@@ -4589,6 +4682,154 @@ const coleccionesCatalogos = ['productos', 'usuarios', 'categorias', 'configurac
   window.addEventListener('offline', updateNetworkStatus);
 
   render();
+
+  // ========== DEPARTAMENTOS (INGRESOS POR CATEGORÍA) ==========
+window.deptSpecificDate = window.deptSpecificDate || (function(){
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+})();
+
+async function renderDepartments(container) {
+    container.innerHTML = `<div class="flex flex-col items-center justify-center h-64 text-muted fade-in"><i data-lucide="loader" class="w-8 h-8 animate-spin text-accent mb-4"></i><p class="font-semibold text-sm">Calculando ingresos por departamento...</p></div>`;
+    lucide.createIcons();
+
+    const [yStr, mStr, dStr] = window.deptSpecificDate.split('-');
+    const y = parseInt(yStr);
+    const m = parseInt(mStr) - 1;
+
+    await window.cargarMesFirebase(y, m);
+
+    const sales = records('sale');
+    const products = records('product');
+    const categories = records('category');
+
+    // 1. Filtrar ventas exactas del día seleccionado
+    const specificDaySales = sales.filter(s => {
+        if(!s.date) return false;
+        const d = new Date(s.date);
+        const localDateString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        return localDateString === window.deptSpecificDate;
+    });
+
+    const categoryTotals = {};
+
+    // 2. Inicializamos las categorías existentes
+    categories.forEach(c => categoryTotals[c.name] = 0);
+    categoryTotals['Granel'] = 0; 
+    categoryTotals['Sin Categoría'] = 0;
+
+    // 3. Calculamos totales buscando a qué categoría pertenece cada producto vendido
+    specificDaySales.forEach(s => {
+        const items = s.items ? s.items : [s];
+        items.forEach(item => {
+            let catName = 'Sin Categoría';
+            const itemTotal = Number(item.total) || (Number(item.sell_price) * Number(item.quantity||1)) || 0;
+
+            if (String(item.id).startsWith('bulk_') || (item.name && item.name.includes('(Granel)'))) {
+                catName = 'Granel';
+            } else {
+                const prodRef = products.find(p => p.id === item.id || p.name === item.name);
+                if (prodRef && prodRef.category) catName = prodRef.category;
+            }
+            if(categoryTotals[catName] === undefined) categoryTotals[catName] = 0;
+            categoryTotals[catName] += itemTotal;
+        });
+    });
+
+    // 4. Limpiamos las que están en 0 (si no existen en la BD actual) y ordenamos
+    const sortedCats = Object.entries(categoryTotals)
+        .filter(([name, total]) => total > 0 || categories.find(c=>c.name===name) || name==='Granel')
+        .sort((a, b) => b[1] - a[1]); // Ordenar de mayor a menor venta
+
+    const dateObj = new Date(y, m, parseInt(dStr));
+    const dateDisplay = dateObj.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase();
+    
+    const todayStr = (function(){ const t=new Date(); return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`; })();
+    const isToday = window.deptSpecificDate === todayStr;
+
+    // 5. Dibujar Interfaz HTML
+    container.innerHTML = `
+    <div class="fade-in space-y-6 pb-10 max-w-5xl mx-auto">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+            <h2 class="text-xl font-bold">Departamentos</h2>
+            
+            <div class="flex items-center gap-1 bg-surface border border-card rounded-lg p-1 shadow-sm">
+                <button type="button" id="dept-prev" class="p-1.5 hover:bg-card rounded transition text-muted hover:text-txt z-10 relative" title="Día anterior"><i data-lucide="chevron-left" class="w-4 h-4 pointer-events-none"></i></button>
+                
+                <div class="text-sm font-bold text-center uppercase tracking-wider text-txt w-40 flex justify-center items-center gap-1.5 relative">
+                    <input type="date" id="dept-date-picker" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full" value="${window.deptSpecificDate}">
+                    ${dateDisplay} ${isToday ? '<span class="bg-success/20 text-success text-[10px] px-1.5 py-0.5 rounded-full">HOY</span>' : ''}
+                </div>
+                
+                <button type="button" id="dept-next" class="p-1.5 hover:bg-card rounded transition text-muted hover:text-txt z-10 relative ${isToday ? 'opacity-30 cursor-not-allowed' : ''}" title="Día siguiente"><i data-lucide="chevron-right" class="w-4 h-4 pointer-events-none"></i></button>
+            </div>
+        </div>
+
+        <div class="bg-surface rounded-xl border border-card shadow-sm overflow-hidden flex flex-col">
+            <div class="p-4 border-b border-card font-semibold text-sm text-txt flex items-center gap-2 bg-card/10">
+                <i data-lucide="tags" class="w-4 h-4 text-accent2"></i> Ingresos Diarios por Categoría
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-muted text-left border-b border-card bg-surface">
+                            <th class="p-4 font-semibold w-2/3">Categoría</th>
+                            <th class="p-4 font-semibold text-right">Total Vendido</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${sortedCats.length > 0 ? sortedCats.map(([catName, total]) => `
+                            <tr class="border-b border-card/50 hover:bg-card/30 transition bg-surface">
+                                <td class="p-4 font-medium flex items-center gap-3">
+                                    <i data-lucide="tag" class="w-4 h-4 text-muted"></i> 
+                                    <span class="text-txt uppercase text-[13px] tracking-wide">${catName}</span>
+                                </td>
+                                <td class="p-4 font-bold text-right ${total > 0 ? 'text-success' : 'text-muted/50'} text-base">
+                                    ${currency(total)}
+                                </td>
+                            </tr>
+                        `).join('') : `
+                            <tr><td colspan="2" class="p-10 text-center text-muted">No hay datos para esta fecha</td></tr>
+                        `}
+                    </tbody>
+                    <tfoot class="bg-card/20 border-t border-card">
+                        <tr>
+                            <td class="p-4 font-bold text-right text-muted">TOTAL DEL DÍA:</td>
+                            <td class="p-4 font-black text-right text-success text-xl">${currency(Object.values(categoryTotals).reduce((a,b)=>a+b,0))}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>`;
+
+    lucide.createIcons();
+
+    // 6. Lógica de Navegación del Calendario
+    const updateDate = (newDateStr) => {
+        window.deptSpecificDate = newDateStr;
+        renderDepartments(container);
+    };
+
+    document.getElementById('dept-date-picker').onchange = (e) => {
+        if(e.target.value) updateDate(e.target.value);
+    };
+
+    document.getElementById('dept-prev').onclick = () => {
+        const d = new Date(y, m, parseInt(dStr));
+        d.setDate(d.getDate() - 1);
+        updateDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+    };
+
+    document.getElementById('dept-next').onclick = () => {
+        if (window.deptSpecificDate === todayStr) return; // Bloquear botón hacia el futuro
+        const d = new Date(y, m, parseInt(dStr));
+        d.setDate(d.getDate() + 1);
+        updateDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+    };
+}
+  
 
 </script>
  </body>
