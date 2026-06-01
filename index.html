@@ -1604,8 +1604,9 @@ async function renderDashboard(container) {
 
 // ========== INVENTORY (CON BOTONES VISIBLES) ==========
 function renderInventory(container) {
-  const products = records('product');
-  const categories = records('category'); 
+    const products = records('product');
+  // 👇 REEMPLAZA LA LÍNEA DE LAS CATEGORÍAS POR ESTA 👇
+  const categories = records('category').sort((a, b) => (a.order !== undefined ? a.order : 999) - (b.order !== undefined ? b.order : 999));
   let searchTerm = '';
   let editingProduct = null;
   
@@ -1748,10 +1749,16 @@ function renderInventory(container) {
             <button id="cancel-cat-btn" class="bg-card text-muted p-2 rounded-lg hover:bg-bg transition hidden" title="Cancelar Edición"><i data-lucide="x" class="w-5 h-5"></i></button>
           </div>
           <div class="space-y-2 overflow-auto pr-2 flex-1">
-            ${categories.map(c => `
+            ${categories.map((c, i) => `
               <div class="flex flex-col xl:flex-row xl:items-center justify-between bg-card/40 p-3 rounded-lg border border-card gap-2">
                 <span class="text-sm font-medium truncate pr-2">${c.name}</span>
                 <div class="flex items-center gap-2 shrink-0">
+                  
+                  <div class="flex gap-1 bg-surface border border-card rounded px-1">
+                    <button type="button" onclick="window.moveCategory('${c.id}', -1)" class="p-1 text-muted hover:text-accent transition disabled:opacity-30" ${i === 0 ? 'disabled' : ''} title="Subir"><i data-lucide="arrow-up" class="w-3.5 h-3.5 pointer-events-none"></i></button>
+                    <button type="button" onclick="window.moveCategory('${c.id}', 1)" class="p-1 text-muted hover:text-accent transition disabled:opacity-30" ${i === categories.length - 1 ? 'disabled' : ''} title="Bajar"><i data-lucide="arrow-down" class="w-3.5 h-3.5 pointer-events-none"></i></button>
+                  </div>
+
                   <button type="button" onclick="window.editCategory('${c.id}')" class="flex items-center gap-1 bg-accent/10 border border-accent/20 text-accent px-2.5 py-1.5 rounded hover:bg-accent hover:text-bg transition font-semibold text-xs">
                     <i data-lucide="edit-2" class="w-3.5 h-3.5 pointer-events-none"></i> Editar
                   </button>
@@ -1762,9 +1769,7 @@ function renderInventory(container) {
               </div>
             `).join('') || '<p class="text-xs text-muted text-center py-4">No hay categorías creadas</p>'}
           </div>
-        </div>
-
-        <div class="bg-surface rounded-xl p-5 border border-card shadow-sm flex flex-col max-h-[350px]">
+        </div> <div class="bg-surface rounded-xl p-5 border border-card shadow-sm flex flex-col max-h-[350px]">
           <h3 class="font-semibold mb-4 flex items-center gap-2"><i data-lucide="package-open" class="w-4 h-4 text-warn"></i> Empaques A Granel</h3>
           <div class="flex gap-2 mb-4 shrink-0">
             <input id="new-bm-name" class="flex-1 bg-card border border-card rounded-lg px-3 py-2 text-sm focus:border-warn focus:outline-none" placeholder="Ej: Vasos, Bolsas...">
@@ -1828,6 +1833,36 @@ function renderInventory(container) {
      });
   };
 
+  // === LÓGICA PARA REORDENAR CATEGORÍAS ===
+  window.moveCategory = async (id, direction) => {
+    let cats = records('category').sort((a, b) => (a.order !== undefined ? a.order : 999) - (b.order !== undefined ? b.order : 999));
+    
+    // Auto-asignar orden a categorías viejas si no lo tenían
+    cats.forEach((c, idx) => { if (c.order === undefined) c.order = idx; });
+
+    const currentIndex = cats.findIndex(c => c.id === id);
+    if (currentIndex < 0) return;
+    
+    const targetIndex = currentIndex + direction;
+    if (targetIndex < 0 || targetIndex >= cats.length) return; // Bloquea si intenta subir la primera o bajar la última
+
+    const currentCat = cats[currentIndex];
+    const targetCat = cats[targetIndex];
+
+    // Intercambiamos los valores "order"
+    const tempOrder = currentCat.order;
+    currentCat.order = targetCat.order;
+    targetCat.order = tempOrder;
+
+    // Actualizamos silenciosamente ambas en la base de datos
+    dbSdk.update({ id: currentCat.id, type: 'category', order: currentCat.order });
+    dbSdk.update({ id: targetCat.id, type: 'category', order: targetCat.order });
+
+    // Recargamos visualmente de inmediato
+    renderInventory(container);
+  };
+  // ========================================
+
   document.getElementById('add-cat-btn').onclick = async () => {
     const name = document.getElementById('new-cat-name').value.trim();
     if(!name) return showToast('Escribe un nombre', 'warn');
@@ -1851,13 +1886,16 @@ function renderInventory(container) {
         }
 
         showToast('Categoría y productos actualizados', 'success');
-      } else {
+    } else {
         if(categories.some(c => c.name.toLowerCase() === name.toLowerCase())) {
           showToast('Esta categoría ya existe', 'warn');
           btn.disabled = false;
           return;
         }
-        await dbSdk.create({ type: 'category', name, date: now() });
+        // 👇 AGREGA EL ORDEN AL CREARLA 👇
+        const nextOrder = categories.length > 0 ? Math.max(...categories.map(c => c.order || 0)) + 1 : 0;
+        await dbSdk.create({ type: 'category', name, date: now(), order: nextOrder });
+        
         showToast('Categoría creada');
       }
     } catch(err) {
@@ -3634,8 +3672,12 @@ function renderCashierPOS() {
     const container = document.getElementById('pos-categories');
     if (!container) return;
 
-    const categories = records('category');
+    // 👇 SOLAMENTE REEMPLAZA ESTA LÍNEA 👇
+    const categories = records('category').sort((a, b) => (a.order !== undefined ? a.order : 999) - (b.order !== undefined ? b.order : 999));
+    
     const allCats = [{id: 'all', name: 'Todas'}, ...categories];
+
+    // ... el resto sigue intacto
 
     container.innerHTML = allCats.map(c => {
        const val = c.id === 'all' ? '' : c.name;
