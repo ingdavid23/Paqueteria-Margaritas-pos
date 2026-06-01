@@ -1959,22 +1959,41 @@ function renderInventory(container) {
     btn.textContent = 'Guardando...';
 
     const newName = document.getElementById('prod-name').value.trim();
+    const inputCode = document.getElementById('prod-code').value.trim();
 
-const data = {
-  type: 'product',
-  name: newName,
-  code: document.getElementById('prod-code').value.trim() || genId().slice(0,8).toUpperCase(),
-  category: document.getElementById('prod-cat').value,
-  
-  // === NUEVA LÍNEA PARA GUARDAR EL PRECIO DE COMPRA ===
-  buy_price: parseFloat(document.getElementById('prod-buy').value) || 0,
-  // ====================================================
+    // === NUEVA VALIDACIÓN DE CÓDIGO DUPLICADO ===
+    if (inputCode) {
+        const isDuplicate = records('product').some(p => 
+            p.code && 
+            p.code.toLowerCase() === inputCode.toLowerCase() && 
+            (!editingProduct || p.id !== editingProduct.id) // Ignorar si es el mismo producto que estamos editando
+        );
 
-  sell_price: parseFloat(document.getElementById('prod-sell').value),
-  stock: parseFloat(document.getElementById('prod-stock').value) || 0,
-  min_stock: 5,
-  image: document.getElementById('prod-img-base64').value || (editingProduct ? editingProduct.image : '')
-};
+        if (isDuplicate) {
+            showToast('Ese código ya está en uso por otro producto', 'error');
+            btn.disabled = false;
+            btn.textContent = editingProduct ? 'Actualizar Producto' : 'Guardar Producto';
+            document.getElementById('prod-code').focus(); // Regresa el cursor al código para corregirlo
+            return; // Detiene la ejecución para que NO se guarde
+        }
+    }
+    // ============================================
+
+    const data = {
+      type: 'product',
+      name: newName,
+      code: inputCode || genId().slice(0,8).toUpperCase(),
+      category: document.getElementById('prod-cat').value,
+      
+      // === NUEVA LÍNEA PARA GUARDAR EL PRECIO DE COMPRA ===
+      buy_price: parseFloat(document.getElementById('prod-buy').value) || 0,
+      // ====================================================
+
+      sell_price: parseFloat(document.getElementById('prod-sell').value),
+      stock: parseFloat(document.getElementById('prod-stock').value) || 0,
+      min_stock: 5,
+      image: document.getElementById('prod-img-base64').value || (editingProduct ? editingProduct.image : '')
+    };
 
     if (editingProduct) {
       const oldName = editingProduct.name;
