@@ -4104,21 +4104,21 @@ const newTicket = {
       btnConfirm.disabled = false; 
     }
   }
-
   function renderCashierHistory() {
     const mySales = records('sale').filter(s => s.cashier === (currentUser?.username||''));
     const todayMySales = mySales.filter(s => sessionStart && s.date >= sessionStart);
     
     // === Agrupar por Tickets para el Cajero ===
     const ticketMap = new Map();
-    todayMySales.forEach(s => { // <--- AQUÍ ESTÁ EL CAMBIO QUE REVIVE LA PESTAÑA
+    todayMySales.forEach(s => { 
         const tId = s.ticket_num || s.id;
         if(!ticketMap.has(tId)) {
           ticketMap.set(tId, {
             id: s.id, 
             ticket_num: s.ticket_num,
-            tracking_number: s.tracking_number, // <--- JALAMOS EL RASTREO AQUÍ
-            is_invoiceable: s.is_invoiceable === true || String(s.is_invoiceable) === 'true', // <--- ESTO ES LO QUE FALTABA JALAR
+            tracking_number: s.tracking_number, 
+            evidence_image: s.evidence_image, // <-- Agregamos soporte para fotos aquí
+            is_invoiceable: s.is_invoiceable === true || String(s.is_invoiceable) === 'true', 
             date: s.date,
             payment_method: s.payment_method,
             cashier: s.cashier,
@@ -4127,7 +4127,6 @@ const newTicket = {
           });
         }
       
-      // 🔥 SOLUCIÓN: Magia de desempaquetado para Súper-Tickets y ventas viejas
       if (s.items && Array.isArray(s.items)) {
         ticketMap.get(tId).raw_sales.push(...s.items);
       } else {
@@ -4155,32 +4154,45 @@ const newTicket = {
         <table class="w-full text-sm">
           <thead><tr class="text-muted text-left border-b border-card"><th class="p-3">Hora</th><th class="p-3">Ticket</th><th class="p-3">Artículos</th><th class="p-3">Total</th><th class="p-3">Pago</th><th class="p-3 text-center">Acciones</th></tr></thead>
           <tbody>
-            ${specificDayGroupedSales.map(t => `
+            <!-- 👇 AQUÍ ESTABA EL ERROR (groupedSales) 👇 -->
+            ${groupedSales.map(t => `
               <tr class="border-b border-card/50 hover:bg-card/30 transition">
-                <td class="p-3 text-muted">${formatLocalTime(t.date)}</td>
+                <td class="p-3 text-muted">${t.date ? new Date(t.date).toLocaleString('es-MX', {hour:'2-digit', minute:'2-digit'}) : '-'}</td>
                 <td class="p-3 font-bold text-accent">#${t.ticket_num || 'S/N'}</td>
                 <td class="p-3">
-                  <div class="text-xs text-muted max-w-[250px] truncate" title="${t.raw_sales.map(i => `${i.quantity}x ${i.name}`).join('\n')}">
-                    ${t.raw_sales.map(i => `<span class="font-bold">${i.quantity}x</span> ${i.name}`).join(', ')}
+                  <div class="text-xs text-muted max-w-[250px] truncate" title="${t.raw_sales.map(i => `${i.quantity || 1}x ${i.name || 'Producto'}`).join('\n')}">
+                    ${t.raw_sales.map(i => `<span class="font-bold">${i.quantity || 1}x</span> ${i.name || 'Producto'}`).join(', ')}
                   </div>
                 </td>
                 <td class="p-3 font-semibold">${currency(t.order_total)}</td>
                 <td class="p-3"><span class="text-[10px] px-2 py-1 rounded-lg font-bold ${t.payment_method==='Efectivo'?'bg-success/20 text-success':'bg-accent/20 text-accent'}">${t.payment_method||'-'}</span></td>
-                <td class="p-3 text-muted">${t.cashier||'-'}</td>
                 <td class="p-3 text-center flex items-center justify-center gap-2">
+                
+                ${t.is_invoiceable 
+                  ? `<span class="text-[10px] px-2 py-1 bg-success/10 text-success border border-success/20 rounded-lg font-bold whitespace-nowrap" title="Requiere Factura">✅ Facturable</span>` 
+                  : `<span class="text-[10px] px-2 py-1 bg-card text-muted border border-card rounded-lg font-bold whitespace-nowrap" title="Venta de mostrador">❌ No Facturable</span>`
+                }
+
+                ${t.evidence_image ? `
+                <button type="button" onclick="window.showEvidence('${t.id}')" class="p-2 bg-success/10 hover:bg-success/20 rounded-lg transition text-success" title="Ver Evidencia">
+                  <i data-lucide="image" class="w-4 h-4 pointer-events-none"></i>
+                </button>` : ''}
+                
+                <button type="button" data-view-ticket="${t.id}" class="p-2 bg-accent/10 hover:bg-accent/20 rounded-lg transition text-accent" title="Ver Ticket">
+                  <i data-lucide="receipt" class="w-4 h-4 pointer-events-none"></i>
+                </button>
                   
-                  ${t.evidence_image ? `
-                  <button type="button" onclick="window.showEvidence('${t.id}')" class="p-2 bg-success/10 hover:bg-success/20 rounded-lg transition text-success" title="Ver Evidencia">
-                    <i data-lucide="image" class="w-4 h-4 pointer-events-none"></i>
-                  </button>` : ''}
-                  <button type="button" data-view-ticket="${t.id}" class="p-2 bg-accent/10 hover:bg-accent/20 rounded-lg transition text-accent" title="Ver Ticket">
-                    <i data-lucide="receipt" class="w-4 h-4 pointer-events-none"></i>
+                  <button type="button" onclick="window.requestEdit('${t.id}')" class="p-2 bg-warn/10 text-warn rounded-lg hover:bg-warn/20 transition" title="Editar Ticket">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 pointer-events-none">
+                      <line x1="18" y1="2" x2="22" y2="6"/>
+                      <path d="M7.5 20.5 2 22l1.5-5.5L17 3l4 4L7.5 20.5z"/>
+                    </svg>
                   </button>
-                  <button type="button" data-del-sale="${t.id}" class="p-2 hover:bg-danger/20 rounded-lg transition text-danger" title="Eliminar Ticket Completo">
-                    <i data-lucide="trash-2" class="w-4 h-4 pointer-events-none"></i>
+                  <button type="button" onclick="window.requestRefund('${t.id}')" class="p-2 bg-danger/10 text-danger rounded-lg hover:bg-danger/20 transition" title="Cancelar Ticket Completo">
+                    <i data-lucide="rotate-ccw" class="w-4 h-4 pointer-events-none"></i>
                   </button>
                 </td>
-              </tr>`).join('') || `<tr><td colspan="7" class="p-10 text-center text-muted">No hubo ventas el ${window.reportSpecificDate}</td></tr>`}
+              </tr>`).join('') || '<tr><td colspan="6" class="p-8 text-center text-muted">Sin ventas en este turno</td></tr>'}
           </tbody>
         </table>
       </div>
