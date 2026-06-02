@@ -2248,7 +2248,7 @@ async function renderSalesReport(container) {
         if (new Date().getTime() > new Date(s.evidence_delete_at).getTime()) {
           s.evidence_image = null; 
           s.evidence_delete_at = null;
-          dbSdk.update({ ...s, evidence_image: null, evidence_delete_at: null }); // Borra la imagen de la base de datos
+          dbSdk.update({ ...s, evidence_image: null, evidence_delete_at: null }); 
         }
       }
 
@@ -2257,7 +2257,7 @@ async function renderSalesReport(container) {
         ticket_num: s.ticket_num,
         tracking_number: s.tracking_number, 
         evidence_image: s.evidence_image, 
-        is_invoiceable: s.is_invoiceable === true || String(s.is_invoiceable) === 'true', // <--- JALAMOS ESTATUS DE FACTURA
+        is_invoiceable: s.is_invoiceable === true || String(s.is_invoiceable) === 'true', 
         date: s.date,
         payment_method: s.payment_method,
         cashier: s.cashier,
@@ -2289,17 +2289,14 @@ async function renderSalesReport(container) {
 
   // === CÁLCULOS MENSUALES (GRANEL Y UTILIDAD NETA) ===
   let monthBulkTotal = 0;
-  let monthCOGS = 0; // Costo de la mercancía vendida en el mes
+  let monthCOGS = 0; 
 
   filteredSales.forEach(s => {
     const items = s.items ? s.items : [s];
     items.forEach(item => {
-      // Sumar Granel
       if ((item.id && String(item.id).startsWith('bulk_')) || (item.name && item.name.includes('(Granel)'))) {
         monthBulkTotal += (Number(item.total) || 0);
       }
-      
-      // Costo para la utilidad mensual
       let buyP = Number(item.buy_price || 0);
       if (buyP === 0) {
           const prodRef = allRecords.find(r => r.type === 'product' && (r.id === item.id || r.name === item.name));
@@ -2309,7 +2306,6 @@ async function renderSalesReport(container) {
     });
   });
 
-  // Filtrar los gastos (egresos) de este mes
   const monthExpenses = records('expense').filter(e => {
     if(!e.date) return false;
     const d = new Date(e.date);
@@ -2317,10 +2313,8 @@ async function renderSalesReport(container) {
   });
   const totalMonthExpense = monthExpenses.reduce((a,e) => a+(e.amount||0), 0);
   
-  // UTILIDAD NETA DEL MES (Ventas - Costos - Gastos)
   const monthNetProfit = monthTotal - monthCOGS - totalMonthExpense;
 
-  // === CALCULAR UTILIDAD DEL DÍA ESPECÍFICO ===
   let specificDayProfit = 0;
   specificDaySales.forEach(s => {
     const items = s.items ? s.items : [s];
@@ -2335,16 +2329,13 @@ async function renderSalesReport(container) {
       specificDayProfit += (itemRevenue - itemCost);
     });
   });
-  // ===================================================
 
-  // === NUEVO: FILTRAR TICKETS PARA LA TABLA SEGÚN EL DÍA SELECCIONADO ===
   const specificDayGroupedSales = groupedSales.filter(t => {
     if(!t.date) return false;
     const d = new Date(t.date);
     const localDateString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     return localDateString === window.reportSpecificDate;
   });
-  // ======================================================================
 
   container.innerHTML = `
   <div class="fade-in space-y-6 pb-10">
@@ -2417,11 +2408,16 @@ async function renderSalesReport(container) {
               <td class="p-3 font-semibold">${currency(t.order_total)}</td>
               <td class="p-3"><span class="text-[10px] px-2 py-1 rounded-lg font-bold ${t.payment_method==='Efectivo'?'bg-success/20 text-success':'bg-accent/20 text-accent'}">${t.payment_method||'-'}</span></td>
               <td class="p-3 text-muted">${t.cashier||'-'}</td>
-              <td class="p-3 text-center flex justify-center gap-2">
-                <button type="button" data-view-ticket="${t.id}" class="p-2 bg-accent/10 hover:bg-accent/20 rounded-lg transition text-accent" title="Ver Ticket">
+              <td class="p-3 text-center flex items-center justify-center gap-2">
+                
+                ${t.evidence_image ? `
+                <button type="button" onclick="window.showEvidence('${t.id}')" class="p-2 bg-success/10 hover:bg-success/20 rounded-lg transition text-success flex items-center justify-center" title="Ver Evidencia">
+                  <i data-lucide="image" class="w-4 h-4 pointer-events-none"></i>
+                </button>` : ''}
+                <button type="button" data-view-ticket="${t.id}" class="p-2 bg-accent/10 hover:bg-accent/20 rounded-lg transition text-accent flex items-center justify-center" title="Ver Ticket">
                   <i data-lucide="receipt" class="w-4 h-4 pointer-events-none"></i>
                 </button>
-                <button type="button" data-del-sale="${t.id}" class="p-2 hover:bg-danger/20 rounded-lg transition text-danger" title="Eliminar Ticket Completo">
+                <button type="button" data-del-sale="${t.id}" class="p-2 hover:bg-danger/20 rounded-lg transition text-danger flex items-center justify-center" title="Eliminar Ticket Completo">
                   <i data-lucide="trash-2" class="w-4 h-4 pointer-events-none"></i>
                 </button>
               </td>
@@ -2450,7 +2446,7 @@ async function renderSalesReport(container) {
               <td class="p-3 text-muted truncate max-w-xs">${m.description||'-'}</td>
               <td class="p-3 text-muted">${m.cashier||'-'}</td>
               <td class="p-3 text-center">
-                <button type="button" data-del-mov="${m.id}" class="p-2 hover:bg-danger/20 rounded-lg transition text-danger" title="Revertir Movimiento y Restaurar Stock">
+                <button type="button" data-del-mov="${m.id}" class="p-2 hover:bg-danger/20 rounded-lg transition text-danger flex items-center justify-center" title="Revertir Movimiento y Restaurar Stock">
                   <i data-lucide="rotate-ccw" class="w-4 h-4 pointer-events-none"></i>
                 </button>
               </td>
@@ -2505,7 +2501,6 @@ async function renderSalesReport(container) {
       showToast('Excel del día descargado');
   };
 
-  // Interceptores de clic (Eliminar / Ver Ticket / Revertir Movimiento)
   container.onclick = (e) => {
     const viewBtn = e.target.closest('[data-view-ticket]');
     if (viewBtn) openAdminTicketModal(viewBtn.dataset.viewTicket);
@@ -2522,7 +2517,6 @@ async function renderSalesReport(container) {
           for (const venta of salesToRefund) {
             const itemsList = venta.items ? venta.items : [venta]; 
             
-            // --- AQUÍ EMPIEZA TU NUEVO CÓDIGO ---
             for (const item of itemsList) {
               const record = allRecords.find(r => r.id === item.id || (r.type === 'product' && r.name === item.name));
               
@@ -2531,7 +2525,6 @@ async function renderSalesReport(container) {
                 record.stock = Number(record.stock) + qtyToRestore;
                 dbSdk.update(record); 
 
-                // Registrar el movimiento de devolución para que aparezca en el historial
                 dbSdk.create({
                   type: 'movement', 
                   name: record.name, 
@@ -2546,7 +2539,6 @@ async function renderSalesReport(container) {
                 });
               }
             }
-            // --- AQUÍ TERMINA TU NUEVO CÓDIGO ---
 
             dbSdk.delete(venta); 
             const saleIdx = allRecords.findIndex(r => r.id === venta.id);
@@ -2586,7 +2578,8 @@ async function renderSalesReport(container) {
         });
       }
     }
-    // === NUEVO: ESCUCHADOR PARA CAMBIAR ESTATUS DE FACTURACIÓN ===
+  };
+  
   container.addEventListener('change', async (e) => {
     if (e.target.matches('[data-update-inv]')) {
       const ticketId = e.target.dataset.updateInv;
@@ -2594,23 +2587,19 @@ async function renderSalesReport(container) {
       
       const s = sales.find(r => r.id === ticketId);
       if (s) {
-        // Encontramos todos los artículos que pertenecen a este mismo ticket
         const salesToUpdate = s.ticket_num ? sales.filter(r => r.ticket_num === s.ticket_num) : [s];
+        e.target.disabled = true; 
         
-        e.target.disabled = true; // Evitar doble clic rápido
-        
-        // Actualizamos cada artículo del ticket en la base de datos
         for (const venta of salesToUpdate) {
           venta.is_invoiceable = isInvoiceable;
           await dbSdk.update(venta);
         }
         
         showToast('Estatus de facturación actualizado', 'success');
-        renderSalesReport(container); // Recargamos para mostrar los nuevos colores
+        renderSalesReport(container); 
       }
     }
   });
-  };
 }
 
 // ========== FINANCE ==========
@@ -3006,15 +2995,18 @@ async function renderInvoicing(container) {
              
             <td class="p-3 font-semibold text-txt">${currency(t.order_total)}</td>
                 <td class="p-3"><span class="text-[10px] px-2 py-1 rounded-lg font-bold bg-card text-muted">${t.payment_method||'-'}</span></td>
-                <td class="p-3 text-center flex justify-center gap-2">
-                  ${t.evidence_image ? `
-                  <button type="button" onclick="window.showEvidence('${t.id}')" class="p-2 bg-success/10 hover:bg-success/20 rounded-lg transition text-success" title="Ver Evidencia">
-                    <i data-lucide="image" class="w-4 h-4 pointer-events-none"></i>
-                  </button>` : ''}
-                  <button type="button" data-view-ticket="${t.id}" class="p-2 bg-accent/10 hover:bg-accent/20 rounded-lg transition text-accent" title="Ver Ticket">
-                    <i data-lucide="receipt" class="w-4 h-4 pointer-events-none"></i>
-                  </button>
-                </td>
+               <td class="p-3 text-center flex justify-center gap-2">
+                ${t.evidence_image ? `
+                <button type="button" onclick="window.showEvidence('${t.id}')" class="p-2 bg-success/10 hover:bg-success/20 rounded-lg transition text-success" title="Ver Evidencia">
+                  <i data-lucide="image" class="w-4 h-4 pointer-events-none"></i>
+                </button>` : ''}
+                <button type="button" data-view-ticket="${t.id}" class="p-2 bg-accent/10 hover:bg-accent/20 rounded-lg transition text-accent" title="Ver Ticket">
+                  <i data-lucide="receipt" class="w-4 h-4 pointer-events-none"></i>
+                </button>
+                <button type="button" data-del-sale="${t.id}" class="p-2 hover:bg-danger/20 rounded-lg transition text-danger" title="Eliminar Ticket Completo">
+                  <i data-lucide="trash-2" class="w-4 h-4 pointer-events-none"></i>
+                </button>
+              </td>
               </tr>
             `).join('') || `<tr><td colspan="6" class="p-10 text-center text-muted">No hay registros en esta categoría</td></tr>`}
           </tbody>
@@ -3107,10 +3099,9 @@ function renderUsersAdmin(container) {
           <button type="button" id="u-cancel" class="bg-card text-muted px-3 py-2 rounded-lg hover:bg-bg transition text-sm hidden">Cancelar</button>
         </div>
         
-        <!-- NUEVO BLOQUE DE PERMISOS -->
         <div class="w-full mt-2 hidden border-t border-card pt-3" id="permissions-container">
           <label class="block text-xs text-muted mb-2 font-bold uppercase">Permisos de Administrador (Pestañas Visibles)</label>
-         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 bg-card/30 p-3 rounded-xl border border-card">
+          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 bg-card/30 p-3 rounded-xl border border-card">
             <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="u-perm" value="admin-departments" class="w-4 h-4 text-accent" checked> <span class="text-sm font-medium">Departamentos</span></label>
             <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="u-perm" value="admin-dashboard" class="w-4 h-4 text-accent" checked> <span class="text-sm font-medium">Dashboard</span></label>
             <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="u-perm" value="admin-inventory" class="w-4 h-4 text-accent" checked> <span class="text-sm font-medium">Inventario</span></label>
@@ -4164,44 +4155,32 @@ const newTicket = {
         <table class="w-full text-sm">
           <thead><tr class="text-muted text-left border-b border-card"><th class="p-3">Hora</th><th class="p-3">Ticket</th><th class="p-3">Artículos</th><th class="p-3">Total</th><th class="p-3">Pago</th><th class="p-3 text-center">Acciones</th></tr></thead>
           <tbody>
-            ${groupedSales.map(t => `
+            ${specificDayGroupedSales.map(t => `
               <tr class="border-b border-card/50 hover:bg-card/30 transition">
-                <td class="p-3 text-muted">${t.date ? new Date(t.date).toLocaleString('es-MX', {hour:'2-digit', minute:'2-digit'}) : '-'}</td>
+                <td class="p-3 text-muted">${formatLocalTime(t.date)}</td>
                 <td class="p-3 font-bold text-accent">#${t.ticket_num || 'S/N'}</td>
                 <td class="p-3">
-                  <div class="text-xs text-muted max-w-[250px] truncate" title="${t.raw_sales.map(i => `${i.quantity || 1}x ${i.name || 'Producto'}`).join('\n')}">
-                    ${t.raw_sales.map(i => `<span class="font-bold">${i.quantity || 1}x</span> ${i.name || 'Producto'}`).join(', ')}
+                  <div class="text-xs text-muted max-w-[250px] truncate" title="${t.raw_sales.map(i => `${i.quantity}x ${i.name}`).join('\n')}">
+                    ${t.raw_sales.map(i => `<span class="font-bold">${i.quantity}x</span> ${i.name}`).join(', ')}
                   </div>
                 </td>
                 <td class="p-3 font-semibold">${currency(t.order_total)}</td>
                 <td class="p-3"><span class="text-[10px] px-2 py-1 rounded-lg font-bold ${t.payment_method==='Efectivo'?'bg-success/20 text-success':'bg-accent/20 text-accent'}">${t.payment_method||'-'}</span></td>
-               <td class="p-3 text-center flex items-center justify-center gap-2">
-                
-                ${t.is_invoiceable 
-                  ? `<span class="text-[10px] px-2 py-1 bg-success/10 text-success border border-success/20 rounded-lg font-bold whitespace-nowrap" title="Requiere Factura">✅ Facturable</span>` 
-                  : `<span class="text-[10px] px-2 py-1 bg-card text-muted border border-card rounded-lg font-bold whitespace-nowrap" title="Venta de mostrador">❌ No Facturable</span>`
-                }
-
-                ${t.evidence_image ? `
-                <button type="button" onclick="window.showEvidence('${t.id}')" class="p-2 bg-success/10 hover:bg-success/20 rounded-lg transition text-success" title="Ver Evidencia">
-                  <i data-lucide="image" class="w-4 h-4 pointer-events-none"></i>
-                </button>` : ''}
-                
-                <button type="button" data-view-ticket="${t.id}" class="p-2 bg-accent/10 hover:bg-accent/20 rounded-lg transition text-accent" title="Ver Ticket">
-                  <i data-lucide="receipt" class="w-4 h-4 pointer-events-none"></i>
-                </button>
+                <td class="p-3 text-muted">${t.cashier||'-'}</td>
+                <td class="p-3 text-center flex items-center justify-center gap-2">
                   
-                  <button type="button" onclick="window.requestEdit('${t.id}')" class="p-2 bg-warn/10 text-warn rounded-lg hover:bg-warn/20 transition" title="Editar Ticket">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 pointer-events-none">
-                      <line x1="18" y1="2" x2="22" y2="6"/>
-                      <path d="M7.5 20.5 2 22l1.5-5.5L17 3l4 4L7.5 20.5z"/>
-                    </svg>
+                  ${t.evidence_image ? `
+                  <button type="button" onclick="window.showEvidence('${t.id}')" class="p-2 bg-success/10 hover:bg-success/20 rounded-lg transition text-success" title="Ver Evidencia">
+                    <i data-lucide="image" class="w-4 h-4 pointer-events-none"></i>
+                  </button>` : ''}
+                  <button type="button" data-view-ticket="${t.id}" class="p-2 bg-accent/10 hover:bg-accent/20 rounded-lg transition text-accent" title="Ver Ticket">
+                    <i data-lucide="receipt" class="w-4 h-4 pointer-events-none"></i>
                   </button>
-                  <button type="button" onclick="window.requestRefund('${t.id}')" class="p-2 bg-danger/10 text-danger rounded-lg hover:bg-danger/20 transition" title="Cancelar Ticket Completo">
-                    <i data-lucide="rotate-ccw" class="w-4 h-4 pointer-events-none"></i>
+                  <button type="button" data-del-sale="${t.id}" class="p-2 hover:bg-danger/20 rounded-lg transition text-danger" title="Eliminar Ticket Completo">
+                    <i data-lucide="trash-2" class="w-4 h-4 pointer-events-none"></i>
                   </button>
                 </td>
-              </tr>`).join('') || '<tr><td colspan="6" class="p-8 text-center text-muted">Sin ventas en este turno</td></tr>'}
+              </tr>`).join('') || `<tr><td colspan="7" class="p-10 text-center text-muted">No hubo ventas el ${window.reportSpecificDate}</td></tr>`}
           </tbody>
         </table>
       </div>
@@ -4707,17 +4686,20 @@ async function renderDepartments(container) {
     container.innerHTML = `<div class="flex flex-col items-center justify-center h-64 text-muted fade-in"><i data-lucide="loader" class="w-8 h-8 animate-spin text-accent mb-4"></i><p class="font-semibold text-sm">Calculando ingresos por departamento...</p></div>`;
     lucide.createIcons();
 
+    // Extraer año, mes y día de la fecha seleccionada
     const [yStr, mStr, dStr] = window.deptSpecificDate.split('-');
-    const y = parseInt(yStr);
-    const m = parseInt(mStr) - 1;
+    const y = parseInt(yStr, 10);
+    // IMPORTANTE: En javascript los meses van de 0 a 11
+    const m = parseInt(mStr, 10) - 1; 
 
+    // Llamamos a la máquina del tiempo de Firebase asegurando de pedir el mes correcto
     await window.cargarMesFirebase(y, m);
 
     const sales = records('sale');
     const products = records('product');
     const categories = records('category');
 
-    // 1. Filtrar ventas exactas del día seleccionado
+    // 1. Filtrar ventas exactas del día seleccionado usando fechas locales seguras
     const specificDaySales = sales.filter(s => {
         if(!s.date) return false;
         const d = new Date(s.date);
@@ -4755,7 +4737,7 @@ async function renderDepartments(container) {
         .filter(([name, total]) => total > 0 || categories.find(c=>c.name===name) || name==='Granel')
         .sort((a, b) => b[1] - a[1]); // Ordenar de mayor a menor venta
 
-    const dateObj = new Date(y, m, parseInt(dStr));
+    const dateObj = new Date(y, m, parseInt(dStr, 10));
     const dateDisplay = dateObj.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase();
     
     const todayStr = (function(){ const t=new Date(); return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`; })();
@@ -4764,14 +4746,14 @@ async function renderDepartments(container) {
     // 5. Dibujar Interfaz HTML
     container.innerHTML = `
     <div class="fade-in space-y-6 pb-10 max-w-5xl mx-auto">
-      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center justify-between gap-3">
             <h2 class="text-xl font-bold">Departamentos</h2>
             
             <div class="flex items-center gap-1 bg-surface border border-card rounded-lg p-1 shadow-sm">
                 <button type="button" id="dept-prev" class="p-1.5 hover:bg-card rounded transition text-muted hover:text-txt z-10 relative" title="Día anterior"><i data-lucide="chevron-left" class="w-4 h-4 pointer-events-none"></i></button>
                 
                 <div class="text-sm font-bold text-center uppercase tracking-wider text-txt w-40 flex justify-center items-center gap-1.5 relative">
-                    <input type="date" id="dept-date-picker" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full" value="${window.deptSpecificDate}">
+                    <input type="date" id="dept-date-picker" class="absolute opacity-0 cursor-pointer" style="width: 140px; height: 100%; left: 50%; transform: translateX(-50%); z-index: 5;" value="${window.deptSpecificDate}">
                     ${dateDisplay} ${isToday ? '<span class="bg-success/20 text-success text-[10px] px-1.5 py-0.5 rounded-full">HOY</span>' : ''}
                 </div>
                 
@@ -4831,14 +4813,15 @@ async function renderDepartments(container) {
     };
 
     document.getElementById('dept-prev').onclick = () => {
-        const d = new Date(y, m, parseInt(dStr));
+        const d = new Date(y, m, parseInt(dStr, 10));
         d.setDate(d.getDate() - 1);
+        // Sumamos 1 al mes para el string porque split('-') espera formato de 1 a 12
         updateDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
     };
 
     document.getElementById('dept-next').onclick = () => {
         if (window.deptSpecificDate === todayStr) return; // Bloquear botón hacia el futuro
-        const d = new Date(y, m, parseInt(dStr));
+        const d = new Date(y, m, parseInt(dStr, 10));
         d.setDate(d.getDate() + 1);
         updateDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
     };
