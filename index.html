@@ -2349,11 +2349,19 @@ async function renderSalesReport(container) {
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h2 class="text-xl font-bold">Ventas y Reportes</h2>
       
-      <div class="flex items-center gap-1 bg-surface border border-card rounded-lg p-1 shadow-sm">
-        <button type="button" id="rep-prev" class="p-1.5 hover:bg-card rounded transition text-muted hover:text-txt"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
-        <div class="text-sm font-bold w-36 text-center uppercase tracking-wider text-accent">${monthName} ${y}</div>
-        <button type="button" id="rep-next" class="p-1.5 hover:bg-card rounded transition text-muted hover:text-txt"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
+      <!-- 👇 Agrupamos el botón Excel Mensual y el selector de mes 👇 -->
+      <div class="flex items-center gap-2">
+        <button id="export-month-sales-btn" class="bg-success/10 text-success text-[11px] px-3 py-2 rounded-lg border border-success/20 hover:bg-success/20 font-bold transition flex items-center gap-1 uppercase shadow-sm">
+          <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Exportar Mes
+        </button>
+        
+        <div class="flex items-center gap-1 bg-surface border border-card rounded-lg p-1 shadow-sm">
+          <button type="button" id="rep-prev" class="p-1.5 hover:bg-card rounded transition text-muted hover:text-txt"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
+          <div class="text-sm font-bold w-36 text-center uppercase tracking-wider text-accent">${monthName} ${y}</div>
+          <button type="button" id="rep-next" class="p-1.5 hover:bg-card rounded transition text-muted hover:text-txt"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
+        </div>
       </div>
+      <!-- 👆 ======================================================= 👆 -->
     </div>
 
     <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
@@ -2520,6 +2528,34 @@ async function renderSalesReport(container) {
       XLSX.writeFile(wb, `Reporte_Ventas_${window.reportSpecificDate}.xlsx`);
       showToast('Excel del día descargado');
   };
+
+  // === NUEVO BOTÓN: EXPORTAR TODO EL MES ===
+  document.getElementById('export-month-sales-btn').onclick = () => {
+      if(!groupedSales.length) return showToast('No hay ventas registradas en este mes', 'warn');
+      
+      const data = [];
+      groupedSales.forEach(t => {
+         t.raw_sales.forEach(item => {
+            data.push({
+              'Ticket': t.ticket_num || 'S/N',
+              'Fecha': formatLocalTime(t.date),
+              'Producto': item.name,
+              'Cantidad': item.quantity || 1,
+              'Total': item.total || (item.sell_price * (item.quantity||1)),
+              'Pago': t.payment_method || 'Efectivo',
+              'Cajero': t.cashier,
+              'Facturable': t.is_invoiceable ? 'SÍ' : 'NO'
+            });
+         });
+      });
+
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Ventas Mensuales");
+      XLSX.writeFile(wb, `Reporte_Ventas_${monthName}_${y}.xlsx`);
+      showToast('Excel mensual descargado', 'success');
+  };
+  // =========================================
 
   container.onclick = (e) => {
     const viewBtn = e.target.closest('[data-view-ticket]');
