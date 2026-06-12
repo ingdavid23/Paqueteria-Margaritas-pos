@@ -3028,7 +3028,6 @@ async function renderFinance(container) {
   lucide.createIcons();
 }
 
-
 // ========== INVOICING (FACTURACIÓN) ==========
 window.invoiceDate = window.invoiceDate || new Date();
 window.invoiceTab = window.invoiceTab || 'facturables';
@@ -3091,31 +3090,25 @@ async function renderInvoicing(container) {
   const activeList = window.invoiceTab === 'facturables' ? facturables : noFacturables;
 
   container.innerHTML = `
-  <div class="fade-in space-y-5 pb-10">
+  <div class="fade-in space-y-5 pb-10 w-full">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h2 class="text-xl font-bold">Finanzas y Estadísticas</h2>
+      <h2 class="text-xl font-bold">Panel de Facturación</h2>
       
-      <div class="flex items-center gap-2">
-        <button id="export-finance-btn" class="bg-success/10 text-success text-[11px] px-3 py-2 rounded-lg border border-success/20 hover:bg-success/20 font-bold transition flex items-center gap-1 uppercase">
-          <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Exportar Mes
-        </button>
-        
-        <div class="flex items-center gap-1 bg-surface border border-card rounded-lg p-1 shadow-sm">
-          <button type="button" id="fin-prev" class="p-1.5 hover:bg-card rounded transition text-muted hover:text-txt"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
-          <div class="text-sm font-bold w-36 text-center uppercase tracking-wider text-accent">${monthName} ${y}</div>
-          <button type="button" id="fin-next" class="p-1.5 hover:bg-card rounded transition text-muted hover:text-txt"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
-        </div>
+      <div class="flex items-center gap-1 bg-surface border border-card rounded-lg p-1 shadow-sm">
+        <button type="button" id="inv-prev" class="p-1.5 hover:bg-card rounded transition text-muted hover:text-txt"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
+        <div class="text-sm font-bold w-36 text-center uppercase tracking-wider text-accent">${monthName} ${y}</div>
+        <button type="button" id="inv-next" class="p-1.5 hover:bg-card rounded transition text-muted hover:text-txt"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
       </div>
-      </div>
+    </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <div class="bg-surface rounded-xl p-5 border border-card text-center shadow-sm relative overflow-hidden">
+    <div class="grid grid-cols-2 gap-4 w-full">
+      <div class="bg-surface rounded-xl p-5 border border-card text-center shadow-sm relative overflow-hidden w-full">
         <div class="absolute inset-0 bg-success/5 pointer-events-none"></div>
         <div class="text-muted text-sm flex items-center justify-center gap-1 relative z-10"><i data-lucide="file-check" class="w-4 h-4 text-success"></i> Total Facturable del Mes</div>
         <div class="text-3xl font-bold text-success mt-2 relative z-10">${currency(totalFacturable)}</div>
         <div class="text-xs text-muted mt-1 relative z-10">${facturables.length} tickets requieren factura</div>
       </div>
-      <div class="bg-surface rounded-xl p-5 border border-card text-center shadow-sm relative overflow-hidden">
+      <div class="bg-surface rounded-xl p-5 border border-card text-center shadow-sm relative overflow-hidden w-full">
         <div class="absolute inset-0 bg-warn/5 pointer-events-none"></div>
         <div class="text-muted text-sm flex items-center justify-center gap-1 relative z-10"><i data-lucide="file-x" class="w-4 h-4 text-warn"></i> Total No Facturable del Mes</div>
         <div class="text-3xl font-bold text-warn mt-2 relative z-10">${currency(totalNoFacturable)}</div>
@@ -3123,7 +3116,7 @@ async function renderInvoicing(container) {
       </div>
     </div>
 
-    <div class="bg-surface rounded-xl border border-card shadow-sm overflow-hidden flex flex-col">
+    <div class="bg-surface rounded-xl border border-card shadow-sm overflow-hidden flex flex-col w-full">
       <div class="flex border-b border-card bg-card/20">
         <button id="tab-facturables" class="flex-1 py-3 text-sm font-bold transition ${window.invoiceTab === 'facturables' ? 'bg-surface text-accent border-b-2 border-accent' : 'text-muted hover:text-txt'}">
           TICKETS FACTURABLES (${facturables.length})
@@ -3187,8 +3180,6 @@ async function renderInvoicing(container) {
 
   lucide.createIcons();
 
-  
-
   document.getElementById('inv-prev').onclick = () => {
     window.invoiceDate.setMonth(window.invoiceDate.getMonth() - 1);
     renderInvoicing(container);
@@ -3225,7 +3216,6 @@ async function renderInvoicing(container) {
     showToast('Excel descargado con éxito', 'success');
   };
 
-  // Activar clic para abrir el modal del ticket desde Facturación
   container.onclick = (e) => {
     const viewBtn = e.target.closest('[data-view-ticket]');
     if (viewBtn) openAdminTicketModal(viewBtn.dataset.viewTicket);
