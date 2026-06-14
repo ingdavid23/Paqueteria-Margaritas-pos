@@ -2529,33 +2529,102 @@ async function renderSalesReport(container) {
       showToast('Excel del día descargado');
   };
 
-  // === NUEVO BOTÓN: EXPORTAR TODO EL MES ===
+  // === BOTÓN: EXPORTAR EXCEL DEL DÍA ===
+  document.getElementById('export-sales-btn').onclick = () => {
+      if(!specificDayGroupedSales.length) return showToast('No hay datos para exportar en este día', 'warn');
+      
+      const products = records('product'); // Cargamos los productos para saber sus categorías
+      const data = [];
+      
+      specificDayGroupedSales.forEach(t => {
+         let departamentos = new Set(); // El Set evita que se repitan los nombres de departamento
+         let resumenArticulos = [];
+         let cantidadTotal = 0;
+
+         t.raw_sales.forEach(item => {
+            // Buscamos el departamento/categoría
+            let catName = 'Sin Categoría';
+            if ((item.id && String(item.id).startsWith('bulk_')) || (item.name && item.name.includes('(Granel)'))) {
+                catName = 'Granel';
+            } else {
+                const prodRef = products.find(p => p.id === item.id || p.name === item.name);
+                if (prodRef && prodRef.category) catName = prodRef.category;
+            }
+            departamentos.add(catName); // Guardamos el departamento
+
+            // Sumamos cantidades y armamos el resumen de artículos
+            let qty = item.quantity || 1;
+            cantidadTotal += qty;
+            resumenArticulos.push(`${qty}x ${item.name}`);
+         });
+
+         // 👇 Guardamos una SOLA fila por cada Ticket 👇
+         data.push({
+            'Ticket': t.ticket_num || 'S/N',
+            'Fecha': formatLocalTime(t.date),
+            'Artículos': resumenArticulos.join(', '),
+            'Departamentos': Array.from(departamentos).join(', '), // Los unimos con comas
+            'Cantidad Total': cantidadTotal,
+            'Total': t.order_total || t.total,
+            'Pago': t.payment_method || 'Efectivo',
+            'Cajero': t.cashier,
+            'Facturable': t.is_invoiceable ? 'SÍ' : 'NO'
+         });
+      });
+
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Ventas");
+      XLSX.writeFile(wb, `Reporte_Ventas_${window.reportSpecificDate}.xlsx`);
+      showToast('Excel del día descargado');
+  };
+
+  // === BOTÓN: EXPORTAR EXCEL DE TODO EL MES ===
   document.getElementById('export-month-sales-btn').onclick = () => {
       if(!groupedSales.length) return showToast('No hay ventas registradas en este mes', 'warn');
       
+      const products = records('product'); 
       const data = [];
+      
       groupedSales.forEach(t => {
+         let departamentos = new Set();
+         let resumenArticulos = [];
+         let cantidadTotal = 0;
+
          t.raw_sales.forEach(item => {
-            data.push({
-              'Ticket': t.ticket_num || 'S/N',
-              'Fecha': formatLocalTime(t.date),
-              'Producto': item.name,
-              'Cantidad': item.quantity || 1,
-              'Total': item.total || (item.sell_price * (item.quantity||1)),
-              'Pago': t.payment_method || 'Efectivo',
-              'Cajero': t.cashier,
-              'Facturable': t.is_invoiceable ? 'SÍ' : 'NO'
-            });
+            let catName = 'Sin Categoría';
+            if ((item.id && String(item.id).startsWith('bulk_')) || (item.name && item.name.includes('(Granel)'))) {
+                catName = 'Granel';
+            } else {
+                const prodRef = products.find(p => p.id === item.id || p.name === item.name);
+                if (prodRef && prodRef.category) catName = prodRef.category;
+            }
+            departamentos.add(catName);
+            
+            let qty = item.quantity || 1;
+            cantidadTotal += qty;
+            resumenArticulos.push(`${qty}x ${item.name}`);
+         });
+
+         data.push({
+            'Ticket': t.ticket_num || 'S/N',
+            'Fecha': formatLocalTime(t.date),
+            'Artículos': resumenArticulos.join(', '),
+            'Departamentos': Array.from(departamentos).join(', '),
+            'Cantidad Total': cantidadTotal,
+            'Total': t.order_total || t.total,
+            'Pago': t.payment_method || 'Efectivo',
+            'Cajero': t.cashier,
+            'Facturable': t.is_invoiceable ? 'SÍ' : 'NO'
          });
       });
 
       const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Ventas Mensuales");
-      XLSX.writeFile(wb, `Reporte_Ventas_${monthName}_${y}.xlsx`);
+      XLSX.writeFile(wb, `Reporte_Mensual_Ventas_${monthName}_${y}.xlsx`);
       showToast('Excel mensual descargado', 'success');
   };
-  // =========================================
 
   container.onclick = (e) => {
     const viewBtn = e.target.closest('[data-view-ticket]');
